@@ -500,7 +500,7 @@ GameObject:
   - component: {fileID: 4515111839882866107}
   - component: {fileID: 3696676024436397802}
   m_Layer: 0
-  m_Name: Portal_Left
+  m_Name: Goal_Left
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -644,7 +644,7 @@ GameObject:
   - component: {fileID: 926541075362885487}
   - component: {fileID: 6209052147861830979}
   m_Layer: 0
-  m_Name: Portal_Right
+  m_Name: Goal_Right
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -950,7 +950,7 @@ GameObject:
   m_Component:
   - component: {fileID: 5525956222800610909}
   m_Layer: 0
-  m_Name: Portals
+  m_Name: Goals
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

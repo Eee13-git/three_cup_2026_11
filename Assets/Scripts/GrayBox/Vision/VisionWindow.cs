@@ -27,6 +27,13 @@ namespace ThreeCup.GrayBox
             Refresh();
         }
 
+        public void SetSize(Vector2 size)
+        {
+            if (size.x <= 0f || size.y <= 0f) return;
+
+            transform.localScale = new Vector3(size.x, size.y, 1f);
+        }
+
         /// <summary>Where the hole should be this frame, independent of transform sync order.</summary>
         public Vector2 ResolveCenter() =>
             owner == null ? (Vector2)transform.position : (Vector2)owner.position + offset;

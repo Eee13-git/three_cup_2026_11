@@ -3,12 +3,12 @@ using UnityEngine;
 namespace ThreeCup.GrayBox
 {
     /// <summary>
-    /// Clearing a level means both characters stand in their own portal at the same time.
+    /// 通关条件：两名角色同时待在自己的终点里。
     /// </summary>
     public sealed class WinChecker : MonoBehaviour
     {
-        [SerializeField] Portal leftPortal;
-        [SerializeField] Portal rightPortal;
+        [SerializeField] LevelGoal leftGoal;
+        [SerializeField] LevelGoal rightGoal;
         [SerializeField] float requiredSeconds = 0.5f;
 
         public event System.Action Won;
@@ -18,10 +18,10 @@ namespace ThreeCup.GrayBox
 
         float heldSeconds;
 
-        public void Configure(Portal left, Portal right)
+        public void Configure(LevelGoal left, LevelGoal right)
         {
-            leftPortal = left;
-            rightPortal = right;
+            leftGoal = left;
+            rightGoal = right;
         }
 
         public void ResetState()
@@ -34,14 +34,14 @@ namespace ThreeCup.GrayBox
         {
             if (Completed) return;
 
-            bool bothInside = leftPortal != null && rightPortal != null &&
-                              leftPortal.Occupied && rightPortal.Occupied;
+            bool bothInside = leftGoal != null && rightGoal != null &&
+                              leftGoal.Occupied && rightGoal.Occupied;
 
             heldSeconds = bothInside ? heldSeconds + Time.deltaTime : 0f;
             if (heldSeconds < requiredSeconds) return;
 
             Completed = true;
-            Debug.Log("[GrayBox] 通关：两名角色同时站在各自的传送门内");
+            Debug.Log("[GrayBox] 通关：两名角色同时站在各自的终点内");
             Won?.Invoke();
         }
     }

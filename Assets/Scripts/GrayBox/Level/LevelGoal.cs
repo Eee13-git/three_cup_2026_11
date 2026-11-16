@@ -2,8 +2,11 @@ using UnityEngine;
 
 namespace ThreeCup.GrayBox
 {
+    /// <summary>
+    /// 一关的终点。两人必须同时待在各自的终点里才算通关。
+    /// </summary>
     [RequireComponent(typeof(Collider2D))]
-    public sealed class Portal : MonoBehaviour
+    public sealed class LevelGoal : MonoBehaviour
     {
         [SerializeField] PlayerSide side = PlayerSide.Left;
 

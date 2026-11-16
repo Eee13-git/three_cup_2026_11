@@ -64,6 +64,7 @@ namespace ThreeCup.EditorTools
                     }
 
                     var root = level.LevelPrefab.transform;
+
                     foreach (var marker in new[] { "Spawn_Left", "Spawn_Right" })
                     {
                         if (FindDeep(root, marker) == null)
@@ -73,20 +74,23 @@ namespace ThreeCup.EditorTools
                         }
                     }
 
-                    foreach (var portalName in new[] { "Portal_Left", "Portal_Right" })
+                    foreach (var goalName in new[] { "Goal_Left", "Goal_Right" })
                     {
-                        var portal = FindDeep(root, portalName);
-                        if (portal == null)
+                        var goal = FindDeep(root, goalName);
+                        if (goal == null)
                         {
-                            report.AppendLine($"  {label} 预制缺少 {portalName}");
+                            report.AppendLine($"  {label} 预制缺少 {goalName}");
                             problems++;
                         }
-                        else if (portal.GetComponent<Portal>() == null)
+                        else if (goal.GetComponent<LevelGoal>() == null)
                         {
-                            report.AppendLine($"  {label} 的 {portalName} 上没有 Portal 组件");
+                            report.AppendLine($"  {label} 的 {goalName} 上没有 LevelGoal 组件");
                             problems++;
                         }
                     }
+
+                    problems += ValidateHazards(root, label, report);
+                    problems += ValidateCheckpoints(root, label, report);
 
                     if (!level.Enabled) report.AppendLine($"  {label} 已标记为禁用");
                 }
@@ -96,6 +100,123 @@ namespace ThreeCup.EditorTools
 
             if (problems == 0) Debug.Log("[GrayBox]\n" + report);
             else Debug.LogWarning("[GrayBox]\n" + report);
+        }
+
+        static int ValidateHazards(Transform root, string label, StringBuilder report)
+        {
+            int problems = 0;
+            var hazards = root.GetComponentsInChildren<Hazard>(true);
+            if (hazards.Length == 0) return 0;
+
+            // 角色是 0.8 x 0.8，出生点周围这么大一块都不能有机关
+            const float playerSize = 0.8f;
+            var spawns = new List<Transform>();
+            foreach (var name in new[] { "Spawn_Left", "Spawn_Right" })
+            {
+                var spawn = FindDeep(root, name);
+                if (spawn != null) spawns.Add(spawn);
+            }
+
+            foreach (var hazard in hazards)
+            {
+                var col = hazard.GetComponent<Collider2D>();
+                if (col == null)
+                {
+                    report.AppendLine($"  {label} 机关 {hazard.name} 上没有碰撞体");
+                    problems++;
+                    continue;
+                }
+
+                if (!col.isTrigger)
+                {
+                    report.AppendLine($"  {label} 机关 {hazard.name} 的碰撞体不是 Trigger，会挡住角色");
+                    problems++;
+                }
+
+                var hazardBounds = GetWorldBounds(col);
+                foreach (var spawn in spawns)
+                {
+                    var spawnBounds = new Bounds(spawn.position, new Vector3(playerSize, playerSize, 1f));
+                    if (!hazardBounds.Intersects(spawnBounds)) continue;
+
+                    report.AppendLine($"  {label} 出生点 {spawn.name} 与机关 {hazard.name} 重叠或贴得太近");
+                    problems++;
+                }
+            }
+
+            return problems;
+        }
+
+        static int ValidateCheckpoints(Transform root, string label, StringBuilder report)
+        {
+            int problems = 0;
+            var checkpoints = root.GetComponentsInChildren<Checkpoint>(true);
+            if (checkpoints.Length == 0) return 0;
+
+            var hazardBounds = new List<(string name, Bounds bounds)>();
+            foreach (var hazard in root.GetComponentsInChildren<Hazard>(true))
+            {
+                var hc = hazard.GetComponent<Collider2D>();
+                if (hc != null) hazardBounds.Add((hazard.name, GetWorldBounds(hc)));
+            }
+
+            var seen = new HashSet<(PlayerSide, int)>();
+
+            foreach (var checkpoint in checkpoints)
+            {
+                var col = checkpoint.GetComponent<Collider2D>();
+                if (col == null)
+                {
+                    report.AppendLine($"  {label} 存档点 {checkpoint.name} 上没有碰撞体");
+                    problems++;
+                    continue;
+                }
+
+                if (!col.isTrigger)
+                {
+                    report.AppendLine($"  {label} 存档点 {checkpoint.name} 的碰撞体不是 Trigger");
+                    problems++;
+                }
+
+                if (!seen.Add((checkpoint.Side, checkpoint.Order)))
+                {
+                    report.AppendLine($"  {label} 存档点 {checkpoint.name} 与同侧其他存档点 order={checkpoint.Order} 重复");
+                    problems++;
+                }
+
+                var bounds = GetWorldBounds(col);
+                foreach (var (hazardName, hazardBound) in hazardBounds)
+                {
+                    if (!bounds.Intersects(hazardBound)) continue;
+
+                    report.AppendLine($"  {label} 存档点 {checkpoint.name} 与机关 {hazardName} 重叠，复活后会立刻再死");
+                    problems++;
+                }
+            }
+
+            return problems;
+        }
+
+        /// <summary>
+        /// 预制资产不在物理世界里，Collider2D.bounds 是零尺寸，
+        /// 所以用 size × lossyScale 自己算。
+        /// </summary>
+        static Bounds GetWorldBounds(Collider2D col)
+        {
+            var t = col.transform;
+            var scale = t.lossyScale;
+
+            if (col is BoxCollider2D box)
+            {
+                var size = new Vector3(
+                    Mathf.Abs(box.size.x * scale.x),
+                    Mathf.Abs(box.size.y * scale.y),
+                    1f);
+                var center = t.position + new Vector3(box.offset.x * scale.x, box.offset.y * scale.y, 0f);
+                return new Bounds(center, size);
+            }
+
+            return new Bounds(t.position, Vector3.zero);
         }
 
         static Transform FindDeep(Transform root, string name)

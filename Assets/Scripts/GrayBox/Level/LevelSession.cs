@@ -58,7 +58,12 @@ namespace ThreeCup.GrayBox
             if (leftPlayer != null) leftPlayer.Died += HandleDeath;
             if (rightPlayer != null) rightPlayer.Died += HandleDeath;
 
-            if (catalog != null && catalog.Count > 0) LoadIndex(startIndex);
+            if (catalog != null && catalog.Count > 0)
+            {
+                // 选关界面写入的关卡序号优先；未选择则回退到场景里配置的 startIndex
+                int index = GameFlow.SelectedLevelIndex >= 0 ? GameFlow.SelectedLevelIndex : startIndex;
+                LoadIndex(index);
+            }
         }
 
         void OnDestroy()

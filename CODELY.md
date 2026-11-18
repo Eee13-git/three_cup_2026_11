@@ -11,6 +11,9 @@
 
 - [2026-11-16 21:47:13] 关卡架构与机关路线（2026-11-16 定）：关卡=预制（地形+终点+出生点标记）+ LevelConfig(SO 含视窗尺寸/偏移) + LevelCatalog 定顺序，LevelSession 场景常驻负责实例化、放人、接终点、自动进下一关；视窗羽化用自定义 shader（GrayBox/VisionFog，_Feather 为世界单位）而非 SpriteMask（模板缓冲只有 0/1）；排序号必须统一从 GrayBoxSorting 取（Terrain0/Mechanism5/Fog10/Divider15/Player20/Hint25）。机关首批优先级：①光柱照出地形（需把 shader 从 2 个矩形扩到 N 个）②跨屏开关+显隐方块（含一次性与可反复两种）③视窗锚定器（窗口停在原地、身体可走开）④致死机关含周期激光；次批为塌陷平台、映射反转器。传送指关卡内传送，与终点语义无关。
 - [2026-11-16 22:12:11] 关卡制作规范（2026-11-16）：存档点坐标就是角色复活坐标，必须摆在角色站立中心高度（平台顶面 +0.4），并离平台边缘与机关至少 0.3，否则复活会卡进地面或贴着危险物；同侧存档点 order 递增，走回头路不会回退到更早的存档点；机关必须是 Trigger，且不能与出生点、存档点重叠。校验入口 Tools/GrayBox/Validate Levels，已覆盖上述规则。**坑**：预制资产不在物理世界里，Collider2D.bounds 为零尺寸，校验里必须用 size×lossyScale 自算包围盒，否则重叠检查会静默失效。
+- [2026-11-18 23:11:06] 主菜单/选关/暂停 UI 流程架构（2026-11-18 定）：场景分工 Start（主菜单：开始游戏→Select、设置弹窗、退出）→ Select（选关）→ 游戏场景；跨场景用 ThreeCup.GameFlow.SelectedLevelId 传关卡 levelId，LevelSession 按 levelId 查找加载（未选则回退 startIndex）；选关界面为 4×3 小正方形网格+翻页，教学关/正式关用两个独立 LevelCatalog 区分（教学关目录 Assets/GameData/TutorialCatalog.asset、正式关目录 Assets/GameData/LevelCatalog.asset），LevelConfig 不区分类型（已还原，无 kind/sceneName 字段）；LevelCatalog 含 sceneName 字段（该目录关卡点击后加载的游戏场景），教学关目录暂空待建、正式关目录为 L001-L005；设置面板提取为 Assets/Prefabs/UI/SettingsPanel.prefab（Start/YSQ 共用）；游戏内暂停菜单 PauseMenu.cs（ESC 呼出/隐藏 + Time.timeScale 暂停 + 设置/返回选关/返回主界面三按钮），当前只挂在 YSQ_TestScene（LHJ 后续再挂）；中文 UI 统一用 GrayBox.PopupFont.Cjk 系统字体 + UI.UIFontSetter 赋给 UGUI Text（非 TMP）；两个目录 sceneName 当前均默认 YSQ_TestScene。
+
+
 
 ### Reference
 

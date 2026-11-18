@@ -8,8 +8,12 @@ namespace ThreeCup.GrayBox
     {
         [SerializeField] List<LevelConfig> levels = new List<LevelConfig>();
 
+        [Tooltip("该目录内关卡点击后加载的游戏场景名")]
+        [SerializeField] string sceneName = "YSQ_TestScene";
+
         public IReadOnlyList<LevelConfig> Levels => levels;
         public int Count => levels.Count;
+        public string SceneName => sceneName;
 
         public LevelConfig Get(int index) =>
             index >= 0 && index < levels.Count ? levels[index] : null;

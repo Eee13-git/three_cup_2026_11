@@ -60,9 +60,10 @@ namespace ThreeCup.GrayBox
 
             if (catalog != null && catalog.Count > 0)
             {
-                // 选关界面写入的关卡序号优先；未选择则回退到场景里配置的 startIndex
-                int index = GameFlow.SelectedLevelIndex >= 0 ? GameFlow.SelectedLevelIndex : startIndex;
-                LoadIndex(index);
+                // 选关界面写入的 levelId 优先；未选择则回退到场景里配置的 startIndex
+                var selected = FindById(GameFlow.SelectedLevelId);
+                if (selected != null) Load(selected);
+                else LoadIndex(startIndex);
             }
         }
 
@@ -278,6 +279,19 @@ namespace ThreeCup.GrayBox
                 if (catalog.Get(i) == config) return i;
 
             return -1;
+        }
+
+        LevelConfig FindById(string levelId)
+        {
+            if (string.IsNullOrEmpty(levelId) || catalog == null) return null;
+
+            for (int i = 0; i < catalog.Count; i++)
+            {
+                var config = catalog.Get(i);
+                if (config != null && config.LevelId == levelId) return config;
+            }
+
+            return null;
         }
 
         static Transform FindDeep(Transform root, string name)

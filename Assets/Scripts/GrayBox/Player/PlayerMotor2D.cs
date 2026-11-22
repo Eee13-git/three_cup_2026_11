@@ -22,8 +22,8 @@ namespace ThreeCup.GrayBox
         [SerializeField] LayerMask groundMask = ~0;
         [SerializeField] float groundRayLength = 0.1f;
 
-        /// <summary>掉坑和机关致死共用这一条路径。</summary>
-        public event System.Action<PlayerSide, DeathCause> Died;
+        /// <summary>掉坑和机关致死共用这一条路径。position 是死亡发生的位置。</summary>
+        public event System.Action<PlayerSide, DeathCause, Vector2> Died;
 
         public PlayerSide Side => side;
         public bool Grounded { get; private set; }
@@ -83,12 +83,14 @@ namespace ThreeCup.GrayBox
 
             invulnerableUntil = Time.time + invulnerabilitySeconds;
 
+            Vector2 deathPosition = body.position;
+
             body.velocity = Vector2.zero;
             body.position = respawnPoint;
             transform.position = respawnPoint;
             DeathCount++;
 
-            Died?.Invoke(side, cause);
+            Died?.Invoke(side, cause, deathPosition);
         }
 
         void Awake()

@@ -26,6 +26,13 @@ namespace ThreeCup.GrayBox
         [Tooltip("死亡后锁操作并显示弹窗的时长")]
         [SerializeField] float deathPopupSeconds = 2f;
 
+        [Header("Effects")]
+        [Tooltip("死亡时在死亡位置播放的水痕")]
+        [SerializeField] GameObject waterStainPrefab;
+
+        [Tooltip("角色到达终点时在污渍处播放的清洁晕")]
+        [SerializeField] GameObject cleanBurstPrefab;
+
         [Header("Prototype")]
         [SerializeField] bool enableHotkeys = true;
         [SerializeField] int startIndex;
@@ -197,11 +204,16 @@ namespace ThreeCup.GrayBox
                 left != null ? left.GetComponent<LevelGoal>() : null,
                 right != null ? right.GetComponent<LevelGoal>() : null);
             winChecker.ResetState();
+
+            foreach (var goal in instance.GetComponentsInChildren<LevelGoal>(true))
+                goal.SetCleanEffect(cleanBurstPrefab);
         }
 
-        void HandleDeath(PlayerSide side, DeathCause cause)
+        void HandleDeath(PlayerSide side, DeathCause cause, Vector2 deathPosition)
         {
             if (Failed) return;
+
+            SpawnEffect(waterStainPrefab, deathPosition);
 
             deaths++;
             Debug.Log($"[GrayBox] {side} 死亡（{cause}）{deaths}/{livesPerLevel}，剩余 {LivesRemaining}");
@@ -240,6 +252,13 @@ namespace ThreeCup.GrayBox
             // 失败窗口以后接 FailedEvent
             Debug.Log("[GrayBox] 关卡失败：生命耗尽");
             FailedEvent?.Invoke();
+        }
+
+        void SpawnEffect(GameObject prefab, Vector2 position)
+        {
+            if (prefab == null) return;
+
+            Instantiate(prefab, new Vector3(position.x, position.y, 0f), Quaternion.identity);
         }
 
         void SetPlayersFrozen(bool value)

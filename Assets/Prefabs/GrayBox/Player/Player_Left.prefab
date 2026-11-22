@@ -27,7 +27,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.4, y: 1.4, z: 1.4}
+  m_LocalScale: {x: 1.0625, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 2542580602119708762}
@@ -98,6 +98,7 @@ GameObject:
   - component: {fileID: 220840642047408593}
   - component: {fileID: 2050378757245907645}
   - component: {fileID: 5735938273693804459}
+  - component: {fileID: 6106078826960925856}
   m_Layer: 0
   m_Name: Player_Left
   m_TagString: Untagged
@@ -162,8 +163,8 @@ SpriteRenderer:
   m_SortingLayerID: 0
   m_SortingLayer: 0
   m_SortingOrder: 20
-  m_Sprite: {fileID: 21300000, guid: 042cc36a5662dd24488a1676acbb17b7, type: 3}
-  m_Color: {r: 0.35, g: 0.75, b: 1, a: 1}
+  m_Sprite: {fileID: 662634780183729958, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
@@ -208,8 +209,8 @@ BoxCollider2D:
   m_Offset: {x: 0, y: 0}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
-    pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1, y: 1}
+    pivot: {x: 0.5, y: 0.55625}
+    oldSize: {x: 1.6842105, y: 1.6842105}
     newSize: {x: 1, y: 1}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -280,3 +281,45 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   side: 0
   highlight: {fileID: 475570203130030368}
+--- !u!114 &6106078826960925856
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4497346212930479643}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8bb7a0f57d6c0ce44b89cc253878a4d2, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  target: {fileID: 5978925652173412041}
+  idle:
+  - {fileID: 662634780183729958, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: 2423421145359919357, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: 9131293770926414781, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: -5438888851564756296, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: -7231649178794276109, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: -2399297661572520067, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  walk:
+  - {fileID: -826245612211388838, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: 2856278486113510952, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: -7900751964682501281, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: 2758901148278532499, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: 7995623852395167794, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: 4118837648336625596, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: 8356320292901897659, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: 70087255575606116, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  jump:
+  - {fileID: -2269404284258837570, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: -8045078536912884950, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: -1677231178002942936, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: -6918810125376340871, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  - {fileID: -1745496445778330898, guid: 6ee6918212d2a034eb3e27064124ee5c, type: 3}
+  idleFps: 8
+  walkFps: 10
+  moveThreshold: 0.3
+  airborneSpeed: 3
+  takeoffHold: 0.06
+  landingHold: 0.1
+  facingThreshold: 0.1

@@ -12,12 +12,30 @@ namespace ThreeCup.GrayBox
     {
         [SerializeField] VisionWindow[] windows = new VisionWindow[2];
 
+        [Header("Window Edge")]
+        [SerializeField] bool showWindowEdge = true;
+        [SerializeField, Range(0f, 1f)] float windowEdgeStrength = 1f;
+
         static readonly int RectAId = Shader.PropertyToID("_RectA");
         static readonly int RectBId = Shader.PropertyToID("_RectB");
+        static readonly int EdgeStrengthId = Shader.PropertyToID("_EdgeStrength");
         static readonly Vector4 Disabled = new Vector4(9999f, 9999f, 0.001f, 0.001f);
 
         SpriteRenderer fog;
         MaterialPropertyBlock block;
+
+        /// <summary>视窗描边的开关，留给以后的设置面板调用。</summary>
+        public bool ShowWindowEdge
+        {
+            get => showWindowEdge;
+            set
+            {
+                if (showWindowEdge == value) return;
+
+                showWindowEdge = value;
+                Push();
+            }
+        }
 
         void LateUpdate() => Push();
 
@@ -37,6 +55,7 @@ namespace ThreeCup.GrayBox
             fog.GetPropertyBlock(block);
             block.SetVector(RectAId, Pack(0));
             block.SetVector(RectBId, Pack(1));
+            block.SetFloat(EdgeStrengthId, showWindowEdge ? Mathf.Clamp01(windowEdgeStrength) : 0f);
             fog.SetPropertyBlock(block);
         }
 

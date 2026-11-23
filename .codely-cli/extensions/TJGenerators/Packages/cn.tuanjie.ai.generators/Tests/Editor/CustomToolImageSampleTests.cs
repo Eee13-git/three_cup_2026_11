@@ -9,15 +9,13 @@ namespace TJGenerators.Editor.Tests
     /// <summary>
     /// Manual EditMode samples for image-family CustomTools (non-GUI).
     /// Image generation now runs on the MCP backend (generate_image -> check_task);
-    /// Unity-side coverage = import_image_from_url (single / multi) + generate_sprite (not migrated).
+    /// Unity-side coverage = import_image_from_url (single texture, sprite and layers).
     /// One submit per scenario (query + wait in the same test) to avoid burning credits.
     /// </summary>
     [Explicit("Manual EditMode sample — select and Run in Test Runner after login")]
     public class CustomToolImageSampleTests : CustomToolSampleTestBase
     {
-        private const string ImagePrompt = "a cute cartoon fox icon on transparent background";
         private static readonly string[] ImagePathKeys = { "image_path" };
-        private static readonly string[] SpritePathKeys = { "sprite_path" };
         private static readonly string[] Layer0Keys = { "layer_0_path" };
 
         // 永久 CDN URL（file_upload 产物，用于 import_image_from_url 样例）
@@ -75,24 +73,21 @@ namespace TJGenerators.Editor.Tests
 
         [UnityTest]
         [Timeout(600000)]
-        public IEnumerator Sprite_Text_WaitUntilCompleted()
+        public IEnumerator ImportSprite_PreservesPlaceholderReference()
         {
-            var submit = GenerateSpriteTool.GenerateSprite(new JObject
+            string path = SampleAssetPath("Sprite_Import", ".png");
+            var submit = ImportImageFromUrlTool.ImportImageFromUrl(new JObject
             {
-                ["prompt"] = ImagePrompt,
-                ["output_path"] = SampleAssetPath("Sprite_Text_WaitDone", ".png")
+                ["image_url"] = SampleCdnUrlA,
+                ["import_type"] = "sprite",
+                ["output_path"] = path
             });
-
             AssertSubmitOk(submit);
-            string taskId = GetTaskId(submit);
-            AssertQueryFound(
-                GenerateSpriteTool.QuerySpriteStatus(new JObject { ["task_id"] = taskId }),
-                taskId);
-
-            yield return WaitUntilTerminalStatus(
-                taskId,
-                id => GenerateSpriteTool.QuerySpriteStatus(new JObject { ["task_id"] = id }),
-                SpritePathKeys);
+            var placeholder = UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.Sprite>(path);
+            Assert.IsNotNull(placeholder);
+            yield return WaitUntilTerminalStatus(GetTaskId(submit),
+                id => ImportImageFromUrlTool.QueryImportStatus(new JObject { ["task_id"] = id }), ImagePathKeys);
+            Assert.AreEqual(placeholder, UnityEditor.AssetDatabase.LoadAssetAtPath<UnityEngine.Sprite>(path));
         }
     }
 }

@@ -279,6 +279,9 @@ namespace ThreeCup.GrayBox
             yield return new WaitForSeconds(advanceDelay);
             advance = null;
 
+            // 通关当前关，解锁选关界面里的下一关
+            if (current != null) ThreeCup.UI.LevelProgress.UnlockNext(current.LevelId);
+
             int next = currentIndex + 1;
             if (catalog != null && next < catalog.Count)
             {

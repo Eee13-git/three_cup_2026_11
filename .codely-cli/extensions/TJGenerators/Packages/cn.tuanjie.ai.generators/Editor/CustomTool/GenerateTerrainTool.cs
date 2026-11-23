@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Codely.Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -19,9 +21,60 @@ using Unity.EditorCoroutines.Editor;
 
 namespace UnityTcp.Editor.Tools
 {
+#if UNITY_EDITOR
+    [InitializeOnLoad]
+    internal static class TerrainApplySceneIdentity
+    {
+        private const string UnsavedPrefix = "TJGen_TerrainScene_Unsaved_";
+        private const string SavedPrefix = "TJGen_TerrainScene_Saved_";
+
+        static TerrainApplySceneIdentity()
+        {
+            UnityEditor.SceneManagement.EditorSceneManager.sceneSaved += OnSceneSaved;
+            UnityEditor.SceneManagement.EditorSceneManager.sceneClosed += OnSceneClosed;
+        }
+
+        internal static string GetIdentity(UnityEngine.SceneManagement.Scene scene)
+        {
+            string guid = AssetDatabase.AssetPathToGUID(scene.path);
+            if (!string.IsNullOrEmpty(guid))
+                return SessionState.GetString(SavedPrefix + guid, "asset:" + guid);
+
+            string identity = "unsaved:" + scene.handle;
+            SessionState.SetString(UnsavedPrefix + scene.handle, identity);
+            return identity;
+        }
+
+        private static void OnSceneSaved(UnityEngine.SceneManagement.Scene scene)
+        {
+            string key = UnsavedPrefix + scene.handle;
+            string identity = SessionState.GetString(key, "");
+            string guid = AssetDatabase.AssetPathToGUID(scene.path);
+            // Save As Copy leaves the original scene unsaved. Only its first real
+            // save establishes an alias; later Save As operations keep distinct GUIDs.
+            if (string.IsNullOrEmpty(identity) || string.IsNullOrEmpty(guid)) return;
+            SessionState.SetString(SavedPrefix + guid, identity);
+            SessionState.EraseString(key);
+        }
+
+        private static void OnSceneClosed(UnityEngine.SceneManagement.Scene scene)
+        {
+            // Keep the GUID alias for reopening the scene in this Editor session.
+            SessionState.EraseString(UnsavedPrefix + scene.handle);
+        }
+    }
+#endif
+
     public static class TerrainTaskTracker
     {
 #if UNITY_EDITOR
+        [Serializable]
+        internal class AppliedTerrainResult
+        {
+            public string terrainDataPath;
+            public string terrainGoName;
+        }
+
         [Serializable]
         private class PersistedTask
         {
@@ -39,6 +92,7 @@ namespace UnityTcp.Editor.Tools
             public string terrainDataPath;
             public string terrainGoName;
             public string backendTaskId;
+            public List<AppliedTerrainResult> previousApplications;
         }
 
         public class TerrainTaskInfo : IGenerationTaskInfo
@@ -57,6 +111,7 @@ namespace UnityTcp.Editor.Tools
             public string TerrainDataPath { get; set; }
             public string TerrainGoName { get; set; }
             public string BackendTaskId { get; set; }
+            internal List<AppliedTerrainResult> PreviousApplications { get; set; } = new List<AppliedTerrainResult>();
         }
 
         private static readonly GenerationTaskTrackerStore<TerrainTaskInfo, PersistedTask> Store =
@@ -78,7 +133,8 @@ namespace UnityTcp.Editor.Tools
             placeholderPath = info.PlaceholderPath ?? "",
             terrainDataPath = info.TerrainDataPath ?? "",
             terrainGoName   = info.TerrainGoName ?? "",
-            backendTaskId   = info.BackendTaskId ?? ""
+            backendTaskId   = info.BackendTaskId ?? "",
+            previousApplications = info.PreviousApplications
         };
 
         private static TerrainTaskInfo FromPersisted(PersistedTask p) => new TerrainTaskInfo
@@ -96,7 +152,8 @@ namespace UnityTcp.Editor.Tools
             PlaceholderPath = p.placeholderPath,
             TerrainDataPath = p.terrainDataPath,
             TerrainGoName   = p.terrainGoName,
-            BackendTaskId   = p.backendTaskId
+            BackendTaskId   = p.backendTaskId,
+            PreviousApplications = p.previousApplications ?? new List<AppliedTerrainResult>()
         };
 
         internal static void ApplyTaskUpdate(TerrainTaskInfo task, Action<TerrainTaskInfo> mutate) =>
@@ -151,6 +208,16 @@ namespace UnityTcp.Editor.Tools
             if (task == null) return;
             Store.ApplyTaskUpdate(task, t =>
             {
+                // The previous scene may already be closed, and old tasks may have no
+                // apply record yet. Retain its result before changing the current one.
+                if (t.Status == "applied" && !string.IsNullOrEmpty(t.TerrainDataPath) &&
+                    t.TerrainDataPath != terrainDataPath &&
+                    !t.PreviousApplications.Exists(r => r.terrainDataPath == t.TerrainDataPath))
+                    t.PreviousApplications.Add(new AppliedTerrainResult
+                    {
+                        terrainDataPath = t.TerrainDataPath,
+                        terrainGoName = t.TerrainGoName
+                    });
                 t.Status          = "applied";
                 t.TerrainDataPath = terrainDataPath;
                 t.TerrainGoName   = terrainGoName;
@@ -195,6 +262,7 @@ namespace UnityTcp.Editor.Tools
             public string ApplyTaskId    { get; set; }
             public string Status         { get; set; }   // "processing" | "completed" | "failed"
             public string HeightmapPath  { get; set; }
+            public string ApplicationKey { get; set; }
             public string TerrainDataPath { get; set; }
             public string TerrainGoName  { get; set; }
             public string ErrorMessage   { get; set; }
@@ -204,8 +272,40 @@ namespace UnityTcp.Editor.Tools
 
         private static readonly Dictionary<string, ApplyTaskInfo> _tasks = new Dictionary<string, ApplyTaskInfo>();
         private static int _counter;
+        private const string SessionKey = "TJGen_TerrainApply_Tasks";
 
-        public static string CreateTask(string heightmapPath)
+        static TerrainApplyTaskTracker() => RestoreTasks();
+
+        internal static void RestoreTasks()
+        {
+            _tasks.Clear();
+            foreach (var item in SessionJsonStore.LoadJsonArray(SessionKey))
+            {
+                var task = item.ToObject<ApplyTaskInfo>();
+                if (task == null || string.IsNullOrEmpty(task.ApplyTaskId)) continue;
+                if (task.Status == "processing")
+                {
+                    task.Status = "failed";
+                    task.ErrorMessage = "Terrain application interrupted by domain reload; retry the same request.";
+                    task.EndTime = DateTime.Now;
+                }
+                _tasks[task.ApplyTaskId] = task;
+            }
+            SaveTasks();
+        }
+
+        private static void SaveTasks() => SessionJsonStore.SaveJsonArray(SessionKey, JArray.FromObject(_tasks.Values));
+
+        internal static ApplyTaskInfo FindReusableTask(string applicationKey)
+        {
+            if (string.IsNullOrEmpty(applicationKey)) return null;
+            foreach (var task in _tasks.Values)
+                if (task.ApplicationKey == applicationKey && (task.Status == "processing" || task.Status == "completed"))
+                    return task;
+            return null;
+        }
+
+        public static string CreateTask(string heightmapPath, string applicationKey = null)
         {
             string id = $"terrain_apply_{++_counter}_{DateTime.Now.Ticks}";
             _tasks[id] = new ApplyTaskInfo
@@ -213,8 +313,10 @@ namespace UnityTcp.Editor.Tools
                 ApplyTaskId = id,
                 Status      = "processing",
                 HeightmapPath = heightmapPath,
+                ApplicationKey = applicationKey,
                 StartTime   = DateTime.Now
             };
+            SaveTasks();
             return id;
         }
 
@@ -226,6 +328,7 @@ namespace UnityTcp.Editor.Tools
                 t.TerrainDataPath = terrainDataPath;
                 t.TerrainGoName   = terrainGoName;
                 t.EndTime         = DateTime.Now;
+                SaveTasks();
             }
         }
 
@@ -236,6 +339,7 @@ namespace UnityTcp.Editor.Tools
                 t.Status       = "failed";
                 t.ErrorMessage = error;
                 t.EndTime      = DateTime.Now;
+                SaveTasks();
             }
         }
 
@@ -246,6 +350,12 @@ namespace UnityTcp.Editor.Tools
         }
 
         public static List<ApplyTaskInfo> GetAllTasks() => new List<ApplyTaskInfo>(_tasks.Values);
+
+        internal static void RemoveTask(string id)
+        {
+            _tasks.Remove(id);
+            SaveTasks();
+        }
 #endif
     }
 
@@ -329,7 +439,7 @@ namespace UnityTcp.Editor.Tools
                 if (templateConfig != null)
                     generator.SetPromptTemplateSelection(templateConfig);
 
-                // 设置 Frontier 参数
+                // 设置 Frontier 参数（强制 PNG，避免后端 jpeg 导致地形链路异常）
                 generator.SetParameter("resolution", resolution);
                 generator.SetParameter("aspectRatio", aspectRatio);
                 generator.SetParameter("outputFormat", "png");
@@ -436,15 +546,25 @@ namespace UnityTcp.Editor.Tools
 
         [ExecuteCustomTool.CustomTool("apply_terrain_heightmap",
             "Start async post-processing of a heightmap PNG and place a Unity Terrain in the scene. " +
-            "IMPORTANT: This is ASYNC — returns apply_task_id immediately (< 1s). " +
-            "Post-processing (bilateral filter + thermal erosion) runs in background (~10-60s). " +
+            "ASYNC: returns apply_task_id before network size estimation and filtering complete. " +
+            "Post-processing (luminance height + multi-scale spike/pit limit) runs in background (~10-60s). " +
             "Poll query_local_task with apply_task_id to check completion. " +
             "Parameters: heightmap_path (required), " +
             "task_id (optional but strongly recommended — prevents duplicate terrain creation; pass the task_id from generate_terrain), " +
             "session_id (optional, string — associates generated assets with a session for tracking), " +
-            "use_default_options (bool, default true — uses recommended median+bilateral+erosion+percentile preset), " +
-            "terrain_go_name (string, default 'TJGenerators Terrain'). " +
+            "application_id (optional string — reuse on retry; change only to intentionally create another copy). " +
+            "Identical source content, scene and settings reuse the pending/completed apply task, including MCP imports. " +
+            "use_default_options (bool, default true — spike limit on + detail_blend 0.25 + median + gaussian + thermal; bilateral off), " +
+            "terrain_go_name (string, default 'TJGenerators Terrain'), " +
+            "world_size_meters (float, optional — longer-side world length in meters. " +
+            "If omitted: tool calls backend doubao-multimodal Lite to estimate from generate_terrain prompt; " +
+            "if that fails, Unity shows an input dialog for the user before creating Terrain. " +
+            "0 means 1 pixel = 1 meter. Height ~14% of side. Resolution unchanged). " +
+            "prompt (string, optional on apply — used for size estimate when task_id has no stored prompt). " +
             "Advanced post-processing (only when use_default_options=false): " +
+            "sketch_reconstruction (bool, default true — multi-scale spike/pit limit, keep valley corridors), " +
+            "sketch_detail_blend (float 0-0.25, default 0.25), " +
+            "sketch_structure_scale (float, 0=auto), sketch_illumination_scale (float, 0=unused), " +
             "median3x3 (bool), gaussian_blur (bool), gaussian_sigma (float), " +
             "bilateral_filter (bool), bilateral_sigma_space (float), bilateral_sigma_color (float), " +
             "thermal_erosion (bool), thermal_erosion_iterations (int), thermal_erosion_talus (float), " +
@@ -454,6 +574,17 @@ namespace UnityTcp.Editor.Tools
         public static object ApplyTerrainHeightmap(JObject parameters)
         {
 #if UNITY_EDITOR
+            return ApplyTerrainHeightmapCore(parameters, TerrainWorldSizeEstimator.EstimateAsync);
+#else
+            return new Dictionary<string, object> { { "success", false }, { "message", "This tool only works in Unity Editor." } };
+#endif
+        }
+
+#if UNITY_EDITOR
+        internal static object ApplyTerrainHeightmapCore(JObject parameters,
+            Func<string, string, string, Task<TerrainWorldSizeEstimator.EstimateResult>> estimateSize)
+        {
+            string startedApplyTaskId = null;
             try
             {
                 string heightmapPath = parameters["heightmap_path"]?.ToString();
@@ -479,25 +610,20 @@ namespace UnityTcp.Editor.Tools
 
                 string taskId        = parameters["task_id"]?.ToString() ?? "";
                 string sessionId     = parameters["session_id"]?.ToString() ?? "";
+                string applicationId = parameters["application_id"]?.ToString() ?? "";
                 GenerationRequestOrigin.SetWorkspaceName(parameters["workspace_name"]?.ToString());
                 string terrainGoName = parameters["terrain_go_name"]?.ToString() ?? "TJGenerators Terrain";
+                float? requestedWorldSize = ReadRequestedWorldSize(parameters);
+                float worldSizeMeters = requestedWorldSize ?? 0f;
+                string sizeAnalysisPrompt = parameters["prompt"]?.ToString() ?? "";
+                string worldSizeSource = requestedWorldSize.HasValue ? "user" : "pending";
 
-                // 重入防护：generate_terrain task 已 applied → 直接返回结果
-                if (!string.IsNullOrEmpty(taskId))
+                var existingTask = string.IsNullOrEmpty(taskId) ? null : TerrainTaskTracker.GetTask(taskId);
+                // 未显式传尺寸时，用 Stage 1 存的 prompt 做尺度分析。
+                if (!requestedWorldSize.HasValue && string.IsNullOrWhiteSpace(sizeAnalysisPrompt) &&
+                    existingTask != null && !string.IsNullOrWhiteSpace(existingTask.Prompt))
                 {
-                    var existingTask = TerrainTaskTracker.GetTask(taskId);
-                    if (existingTask != null && existingTask.Status == "applied")
-                    {
-                        TJLog.LogWarning($"[GenerateTerrainTool] task {taskId} already applied. Skipping.");
-                        return new Dictionary<string, object>
-                        {
-                            { "success",         true },
-                            { "already_applied", true },
-                            { "terrain_data_path", existingTask.TerrainDataPath ?? "" },
-                            { "terrain_go_name",   existingTask.TerrainGoName ?? "" },
-                            { "message",         $"Terrain already applied for task {taskId}. Do NOT call apply_terrain_heightmap again. WORKFLOW COMPLETE." }
-                        };
-                    }
+                    sizeAnalysisPrompt = existingTask.Prompt;
                 }
 
                 // 解析后处理选项
@@ -506,22 +632,75 @@ namespace UnityTcp.Editor.Tools
                 var opts = useDefaults ? TerrainHeightmapPostProcessOptions.Default :
                     new TerrainHeightmapPostProcessOptions
                     {
+                        sketchReconstruction     = GetBool(parameters, "sketch_reconstruction", true),
+                        sketchDetailBlend        = GetFloat(parameters, "sketch_detail_blend", 0.25f),
+                        sketchStructureScale     = GetFloat(parameters, "sketch_structure_scale", 0f),
+                        sketchIlluminationScale  = GetFloat(parameters, "sketch_illumination_scale", 0f),
                         median3x3                = GetBool(parameters, "median3x3", true),
                         gaussianBlur             = GetBool(parameters, "gaussian_blur", true),
                         gaussianSigma            = GetFloat(parameters, "gaussian_sigma", 1.2f),
-                        bilateralFilter          = GetBool(parameters, "bilateral_filter", true),
-                        bilateralSigmaSpace      = GetFloat(parameters, "bilateral_sigma_space", 3.0f),
-                        bilateralSigmaColor      = GetFloat(parameters, "bilateral_sigma_color", 0.2f),
+                        bilateralFilter          = GetBool(parameters, "bilateral_filter", false),
+                        bilateralSigmaSpace      = GetFloat(parameters, "bilateral_sigma_space", 2.5f),
+                        bilateralSigmaColor      = GetFloat(parameters, "bilateral_sigma_color", 0.12f),
                         thermalErosion           = GetBool(parameters, "thermal_erosion", true),
-                        thermalErosionIterations = GetInt(parameters, "thermal_erosion_iterations", 25),
-                        thermalErosionTalus      = GetFloat(parameters, "thermal_erosion_talus", 0.02f),
+                        thermalErosionIterations = GetInt(parameters, "thermal_erosion_iterations", 8),
+                        thermalErosionTalus      = GetFloat(parameters, "thermal_erosion_talus", 0.022f),
                         percentileNormalization  = GetBool(parameters, "percentile_normalize", true),
-                        percentileLow            = GetFloat(parameters, "percentile_low", 0.05f),
-                        percentileHigh           = GetFloat(parameters, "percentile_high", 0.95f),
+                        percentileLow            = GetFloat(parameters, "percentile_low", 0.01f),
+                        percentileHigh           = GetFloat(parameters, "percentile_high", 0.99f),
                         heightGamma              = GetFloat(parameters, "height_gamma", 1.0f),
-                        remapOutputMin           = GetFloat(parameters, "remap_output_min", 0.02f),
-                        remapOutputMax           = GetFloat(parameters, "remap_output_max", 0.98f),
+                        remapOutputMin           = GetFloat(parameters, "remap_output_min", 0f),
+                        remapOutputMax           = GetFloat(parameters, "remap_output_max", 1f),
                     };
+
+                var targetScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+                int targetSceneHandle = targetScene.handle;
+                // First-save aliases retain an unsaved scene's identity even if it is
+                // closed or the domain reloads before the next application request.
+                string applicationKey = BuildApplicationKey(absOriginal, File.ReadAllBytes(absOriginal), new JObject
+                {
+                    ["scene"] = TerrainApplySceneIdentity.GetIdentity(targetScene),
+                    ["session"] = sessionId,
+                    ["name"] = terrainGoName,
+                    ["application_id"] = applicationId,
+                    ["world_size_meters"] = requestedWorldSize.HasValue ? (JToken)requestedWorldSize.Value : JValue.CreateNull(),
+                    ["prompt"] = requestedWorldSize.HasValue ? "" : sizeAnalysisPrompt,
+                    ["options"] = JObject.FromObject(opts)
+                });
+                var reusable = TerrainApplyTaskTracker.FindReusableTask(applicationKey);
+                if (reusable != null && reusable.Status == "completed" && !HasTerrainResult(reusable.TerrainDataPath, targetSceneHandle))
+                {
+                    TerrainApplyTaskTracker.MarkFailed(reusable.ApplyTaskId, "Previous terrain result was removed; application may be retried.");
+                    reusable = null;
+                }
+                // Backfill a scene-specific record before the legacy task's single result
+                // can be replaced by an application in another scene.
+                if (reusable == null && string.IsNullOrEmpty(applicationId) && existingTask != null && existingTask.Status == "applied")
+                {
+                    string legacyDataPath = existingTask.TerrainDataPath;
+                    string legacyGoName = existingTask.TerrainGoName;
+                    if (!HasTerrainResult(legacyDataPath, targetSceneHandle))
+                    {
+                        var previous = existingTask.PreviousApplications.FindLast(r => HasTerrainResult(r.terrainDataPath, targetSceneHandle));
+                        legacyDataPath = previous?.terrainDataPath;
+                        legacyGoName = previous?.terrainGoName;
+                    }
+                    if (!string.IsNullOrEmpty(legacyDataPath))
+                    {
+                        string recoveredId = TerrainApplyTaskTracker.CreateTask(heightmapPath, applicationKey);
+                        TerrainApplyTaskTracker.MarkCompleted(recoveredId, legacyDataPath, legacyGoName);
+                        reusable = TerrainApplyTaskTracker.GetTask(recoveredId);
+                    }
+                }
+                if (reusable != null)
+                {
+                    // Bridge recognizes Dictionary responses with success as already
+                    // formatted; JObject would add a data wrapper only on retries.
+                    var result = (Dictionary<string, object>)QueryTerrainApplyStatus(new JObject { ["apply_task_id"] = reusable.ApplyTaskId });
+                    result["reused"] = true;
+                    result["already_applied"] = reusable.Status == "completed";
+                    return result;
+                }
 
                 string processedAssetPath = TerrainCreationUtils.GenerateProcessedHeightmapAssetPath(originalPath);
                 if (string.IsNullOrEmpty(processedAssetPath))
@@ -556,23 +735,64 @@ namespace UnityTcp.Editor.Tools
                     };
                 }
 
-                string applyTaskId = TerrainApplyTaskTracker.CreateTask(heightmapPath);
+                // Read credentials/configuration on the main thread. Network waits run on a worker.
+                string applyTaskId = TerrainApplyTaskTracker.CreateTask(heightmapPath, applicationKey);
+                startedApplyTaskId = applyTaskId;
+                Task<TerrainWorldSizeEstimator.EstimateResult> sizeEstimateTask;
+                if (!requestedWorldSize.HasValue)
+                {
+                    string authToken = "";
+                    string orgId = "";
+                    try
+                    {
+                        authToken = Unity.UniAsset.Manager.Editor.InternalBridge.UnityConnectSession.instance.GetAccessToken() ?? "";
+                        orgId = Unity.UniAsset.Manager.Editor.InternalBridge.UnityConnectSession.instance.GetOrgId(authToken) ?? "";
+                    }
+                    catch { /* LLM 将失败并走弹窗 */ }
+
+                    sizeEstimateTask = estimateSize(sizeAnalysisPrompt, authToken, orgId);
+                }
+                else
+                    sizeEstimateTask = Task.FromResult(new TerrainWorldSizeEstimator.EstimateResult(worldSizeMeters, "user", "explicit parameter"));
                 TJLog.Log($"[GenerateTerrainTool] apply_terrain_heightmap started async: applyTaskId={applyTaskId}, processed={processedAssetPath}");
 
                 string capturedApplyTaskId     = applyTaskId;
                 string capturedProcessedAsset  = processedAssetPath;
                 string capturedAbsProcessed    = absProcessed;
                 string capturedTerrainGoName   = terrainGoName;
+                float capturedWorldSizeMeters  = worldSizeMeters;
+                float capturedWorldSizeRequested = requestedWorldSize ?? 0f;
+                string capturedWorldSizeSource = worldSizeSource;
                 string capturedSessionId       = sessionId;
                 string capturedTaskId          = taskId;
                 string capturedHeightmapPath   = heightmapPath;
 
                 const int timeoutSeconds = 300;
 
-                Task.Run(() =>
+                Task.Run(async () =>
                 {
                     try
                     {
+                        var estimate = await sizeEstimateTask.ConfigureAwait(false);
+                        if (!estimate.Succeeded)
+                        {
+                            var input = new TaskCompletionSource<TerrainWorldSizeEstimator.EstimateResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+                            TerrainApplyMainThreadDispatcher.Dispatch(() =>
+                            {
+                                try
+                                {
+                                    input.SetResult(TerrainWorldSizeEstimator.TryAskUserMeters(sizeAnalysisPrompt, out float meters, out string error)
+                                        ? new TerrainWorldSizeEstimator.EstimateResult(meters, "user_dialog", "")
+                                        : new TerrainWorldSizeEstimator.EstimateResult(0f, "failed", error ?? "world_size_meters required"));
+                                }
+                                catch (Exception ex) { input.SetException(ex); }
+                            });
+                            estimate = await input.Task.ConfigureAwait(false);
+                            if (!estimate.Succeeded)
+                                throw new InvalidOperationException("world_size_required: " + estimate.Reason);
+                        }
+                        capturedWorldSizeMeters = estimate.Meters;
+                        capturedWorldSizeSource = estimate.Source;
                         var filterStart = DateTime.Now;
                         TerrainHeightmapPostProcessor.ApplyFilters(luminance, imgW, imgH, opts);
                         double filterSeconds = (DateTime.Now - filterStart).TotalSeconds;
@@ -582,6 +802,8 @@ namespace UnityTcp.Editor.Tools
                         {
                             try
                             {
+                                if (UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle != targetSceneHandle)
+                                    throw new InvalidOperationException("Active scene changed during terrain application; return to the original scene and retry.");
                                 if (!TerrainHeightmapPostProcessor.TryEncodeAndSave(
                                         capturedAbsProcessed, luminance, imgW, imgH, out string saveErr))
                                 {
@@ -594,11 +816,11 @@ namespace UnityTcp.Editor.Tools
 
                                 AssetDatabase.ImportAsset(capturedProcessedAsset, ImportAssetOptions.ForceUpdate);
 
-                                string terrainDataPath; string goName;
+                                string terrainDataPath; string goName; Vector3 terrainSize;
                                 try
                                 {
-                                    (terrainDataPath, goName) = TerrainCreationUtils.CreateTerrainFromHeightmap(
-                                        capturedProcessedAsset, capturedTerrainGoName);
+                                    (terrainDataPath, goName, terrainSize) = TerrainCreationUtils.CreateTerrainFromHeightmap(
+                                        capturedProcessedAsset, capturedTerrainGoName, capturedWorldSizeMeters);
                                 }
                                 catch (Exception ex)
                                 {
@@ -620,16 +842,29 @@ namespace UnityTcp.Editor.Tools
                                 GenerationNotifier.NotifyCompleted("apply_terrain_heightmap", capturedApplyTaskId, "",
                                     new JObject
                                     {
-                                        ["session_id"]        = capturedSessionId,
-                                        ["heightmap_path"]    = capturedHeightmapPath,
-                                        ["terrain_data_path"] = terrainDataPath ?? "",
-                                        ["terrain_go_name"]   = goName ?? "",
-                                        ["progress"]          = 100
+                                        ["session_id"]             = capturedSessionId,
+                                        ["heightmap_path"]         = capturedHeightmapPath,
+                                        ["terrain_data_path"]      = terrainDataPath ?? "",
+                                        ["terrain_go_name"]        = goName ?? "",
+                                        ["world_size_meters"]      = capturedWorldSizeMeters > 1f
+                                            ? capturedWorldSizeMeters
+                                            : (float)Math.Max(terrainSize.x, terrainSize.z),
+                                        ["world_size_requested"]   = capturedWorldSizeRequested,
+                                        ["world_size_source"]      = capturedWorldSizeSource ?? "",
+                                        ["terrain_width_meters"]   = terrainSize.x,
+                                        ["terrain_length_meters"]  = terrainSize.z,
+                                        ["terrain_height_meters"]  = terrainSize.y,
+                                        ["progress"]               = 100
                                     });
-                                if (!string.IsNullOrEmpty(capturedTaskId))
+                                // Explicit copies must not replace an already-applied legacy
+                                // task's default result (which may predate apply-task tracking).
+                                if (!string.IsNullOrEmpty(capturedTaskId) &&
+                                    (string.IsNullOrEmpty(applicationId) || TerrainTaskTracker.GetTask(capturedTaskId)?.Status != "applied"))
                                     TerrainTaskTracker.MarkTaskApplied(capturedTaskId, terrainDataPath, goName);
 
-                                TJLog.Log($"[GenerateTerrainTool] Terrain created async: {goName}, TerrainData={terrainDataPath}");
+                                TJLog.Log($"[GenerateTerrainTool] Terrain created async: {goName}, TerrainData={terrainDataPath}, " +
+                                          $"size={terrainSize.x:F1}×{terrainSize.z:F1}×{terrainSize.y:F1}m, " +
+                                          $"world_size_source={capturedWorldSizeSource}, requested={capturedWorldSizeRequested}");
                             }
                             catch (Exception ex)
                             {
@@ -670,6 +905,8 @@ namespace UnityTcp.Editor.Tools
             }
             catch (Exception e)
             {
+                if (startedApplyTaskId != null)
+                    TerrainApplyTaskTracker.MarkFailed(startedApplyTaskId, e.Message);
                 TJLog.LogError($"[GenerateTerrainTool] apply error: {e}");
                 return new Dictionary<string, object>
                 {
@@ -677,14 +914,8 @@ namespace UnityTcp.Editor.Tools
                     { "message", $"Error starting terrain apply: {e.Message}" }
                 };
             }
-#else
-            return new Dictionary<string, object>
-            {
-                { "success", false },
-                { "message", "This tool only works in Unity Editor." }
-            };
-#endif
         }
+#endif
 
         public static object QueryTerrainApplyStatus(JObject parameters)
         {
@@ -953,6 +1184,40 @@ namespace UnityTcp.Editor.Tools
             return placeholderPath;
         }
 
+        internal static float? ReadRequestedWorldSize(JObject parameters)
+        {
+            var value = parameters["world_size_meters"];
+            if (value == null || value.Type == JTokenType.Null) return null;
+            float meters = value.ToObject<float>();
+            if (float.IsNaN(meters) || float.IsInfinity(meters) || meters < 0f || (meters > 0f && meters <= 1f))
+                throw new ArgumentException("world_size_meters must be 0 (1 pixel = 1 meter) or a finite number greater than 1.");
+            return meters;
+        }
+
+        private static bool HasTerrainResult(string terrainDataPath, int sceneHandle)
+        {
+            if (string.IsNullOrEmpty(terrainDataPath)) return false;
+            var data = AssetDatabase.LoadAssetAtPath<TerrainData>(terrainDataPath);
+            if (data == null) return false;
+            foreach (var terrain in Resources.FindObjectsOfTypeAll<Terrain>())
+                if (terrain.gameObject.scene.handle == sceneHandle && terrain.terrainData == data)
+                    return true;
+            return false;
+        }
+
+        internal static string BuildApplicationKey(string heightmapPath, byte[] sourceBytes, JObject settings)
+        {
+            // Content and effective settings matter; transient MCP/import IDs do not.
+            using (var hash = SHA256.Create())
+            {
+                string contentHash = BitConverter.ToString(hash.ComputeHash(sourceBytes));
+                string path = Path.GetFullPath(heightmapPath).Replace('\\', '/');
+                if (Path.DirectorySeparatorChar == '\\') path = path.ToUpperInvariant();
+                string request = path + "\n" + contentHash + "\n" + settings.ToString();
+                return BitConverter.ToString(hash.ComputeHash(Encoding.UTF8.GetBytes(request))).Replace("-", "");
+            }
+        }
+
         private static bool GetBool(JObject p, string key, bool defaultValue)
             => p[key] != null ? p[key].ToObject<bool>() : defaultValue;
 
@@ -1130,20 +1395,12 @@ namespace UnityTcp.Editor.Tools
     internal static class TerrainApplyMainThreadDispatcher
     {
         private static readonly ConcurrentQueue<Action> _queue = new ConcurrentQueue<Action>();
-        private static bool _registered;
+        static TerrainApplyMainThreadDispatcher() => EditorApplication.update += Pump;
 
         public static void Dispatch(Action action)
         {
             if (action == null) return;
             _queue.Enqueue(action);
-            EnsureRegistered();
-        }
-
-        private static void EnsureRegistered()
-        {
-            if (_registered) return;
-            _registered = true;
-            EditorApplication.update += Pump;
         }
 
         private static void Pump()

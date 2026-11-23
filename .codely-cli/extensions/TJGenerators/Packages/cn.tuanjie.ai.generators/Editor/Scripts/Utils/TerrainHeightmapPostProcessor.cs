@@ -74,31 +74,57 @@ namespace TJGenerators.Utils
         /// <summary>输出上限，须大于 remapOutputMin（内部会钳制）。</summary>
         public float remapOutputMax;
 
+        // ── 原版亮度高度 + 多尺度亮刺压制 ────────────────────────────────────
+        /// <summary>
+        /// 仍以亮度当高度（与原版一致，俯视河网对齐参考图）；
+        /// 多尺度压缩山体上的亮脊与暗坑；相对大尺度更低的河谷走廊保留深度。
+        /// 开启时跳过双边/高斯，避免把细河道抹糊。
+        /// </summary>
+        public bool sketchReconstruction;
+
+        /// <summary>
+        /// 亮刺保留幅度（0～0.25）。越高侧视越接近原版细纹，越低山体更圆。河道不受影响。
+        /// </summary>
+        public float sketchDetailBlend;
+
+        /// <summary>
+        /// 中尺度尖刺波长，相对 min(宽,高)。&lt;=0 时自动约 0.01。
+        /// </summary>
+        public float sketchStructureScale;
+
+        /// <summary>保留字段（已不使用）。</summary>
+        public float sketchIlluminationScale;
+
         // ── 快速预设 ──────────────────────────────────────────────────────────
         /// <summary>返回适合大多数 AI 生成高度图的默认选项。</summary>
         public static TerrainHeightmapPostProcessOptions Default => new TerrainHeightmapPostProcessOptions
         {
             median3x3             = true,
-            bilateralFilter       = true,
+            bilateralFilter       = false,
             bilateralSigmaSpace   = 2.5f,
             bilateralSigmaColor   = 0.12f,
-            gaussianBlur          = false,
+            gaussianBlur          = true,
             gaussianSigma         = 1.2f,
             thermalErosion        = true,
-            thermalErosionIterations = 15,
-            thermalErosionTalus   = 0.04f,
+            thermalErosionIterations = 8,
+            thermalErosionTalus   = 0.022f,
             percentileNormalization = true,
             percentileLow         = 0.01f,
             percentileHigh        = 0.99f,
             heightGamma           = 1.0f,
             remapOutputMin        = 0f,
             remapOutputMax        = 1f,
+            sketchReconstruction  = true,
+            sketchDetailBlend     = 0.25f,
+            sketchStructureScale  = 0f,
+            sketchIlluminationScale = 0f,
         };
     }
 
     /// <summary>
     /// 将文生图得到的"高度图"转为灰度并做后处理，覆盖写回同一路径（输出为 PNG）。
-    /// 处理流程：RGB→灰度 → Median去刺 → 双边/高斯平滑 → 热力侵蚀 → 百分位/min-max 归一化 → Gamma → 输出范围重映射（Height Remap）。
+    /// 处理流程：RGB→灰度 → Median →（可选双边/高斯，仅关闭尖刺压制时）→ 热力侵蚀 →
+    /// 百分位/min-max → Gamma → 重映射 →（可选）非对称高频尖刺压制。
     /// </summary>
     public static class TerrainHeightmapPostProcessor
     {
@@ -161,15 +187,19 @@ namespace TJGenerators.Utils
             if (options.median3x3 && w >= 3 && h >= 3)
                 ApplyMedianFilter3x3(luminance, w, h);
 
-            if (options.bilateralFilter && options.bilateralSigmaSpace > 1e-4f)
-                ApplyBilateralFilter(luminance, w, h, options.bilateralSigmaSpace, options.bilateralSigmaColor);
-            else if (options.gaussianBlur && options.gaussianSigma > 1e-4f)
-                ApplySeparableGaussianBlur(luminance, w, h, options.gaussianSigma);
+            // 尖刺压制开启时：跳过双边（易糊细河）；高斯放到限幅之后再跑，避免默认开了却不生效。
+            bool spikeLimit = options.sketchReconstruction && w >= 8 && h >= 8;
+            if (!spikeLimit)
+            {
+                if (options.bilateralFilter && options.bilateralSigmaSpace > 1e-4f)
+                    ApplyBilateralFilter(luminance, w, h, options.bilateralSigmaSpace, options.bilateralSigmaColor);
+                else if (options.gaussianBlur && options.gaussianSigma > 1e-4f)
+                    ApplySeparableGaussianBlur(luminance, w, h, options.gaussianSigma);
+            }
 
             if (options.thermalErosion && options.thermalErosionIterations > 0)
                 ApplyThermalErosion(luminance, w, h, options.thermalErosionIterations, options.thermalErosionTalus);
 
-            // 归一化 + Gamma + 重映射（结果仍写回 luminance[]）
             int n = luminance.Length;
             float normMin, normMax;
             if (options.percentileNormalization)
@@ -204,6 +234,14 @@ namespace TJGenerators.Utils
                     t = (float)System.Math.Pow(t, gamma);
                 luminance[i] = rOutMin + (rOutMax - rOutMin) * t;
             }
+
+            // 在最终高度空间里压尖刺，避免百分位拉伸把限幅又拉回去。
+            if (spikeLimit)
+                ApplyAsymmetricHighFrequencySpikeLimit(luminance, w, h, options);
+
+            // 尖刺压制后再做轻度高斯（默认开启），圆润山体且不抢在限幅之前糊掉河道拓扑。
+            if (spikeLimit && options.gaussianBlur && options.gaussianSigma > 1e-4f)
+                ApplySeparableGaussianBlur(luminance, w, h, options.gaussianSigma);
         }
 
         /// <summary>
@@ -248,121 +286,208 @@ namespace TJGenerators.Utils
             TerrainHeightmapPostProcessOptions options = default
         )
         {
-            errorMessage = null;
-            if (string.IsNullOrEmpty(absolutePath) || !File.Exists(absolutePath))
-            {
-                errorMessage = TJGeneratorsL10n.L("文件不存在");
+            if (!TryExtractPixelData(absolutePath, out float[] luminance, out int w, out int h, out errorMessage))
                 return false;
-            }
 
-            byte[] bytes;
-            try
+            ApplyFilters(luminance, w, h, options);
+            return TryEncodeAndSave(absolutePath, luminance, w, h, out errorMessage);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        //  原版亮度高度 + 非对称高频尖刺压制
+        // ═══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// 原版亮度高度上做多尺度浮雕限幅：
+        /// - 亮脊（尖刺）始终软裁；
+        /// - 暗坑在山体上软裁（去掉蜂窝状侵蚀洞）；
+        /// - 相对大尺度明显更暗的河谷/河道保留深度（水面切割仍对齐）。
+        /// </summary>
+        private static void ApplyAsymmetricHighFrequencySpikeLimit(
+            float[] luminance,
+            int w, int h,
+            TerrainHeightmapPostProcessOptions options)
+        {
+            float minDim = w < h ? w : h;
+            float detailBlend = options.sketchDetailBlend;
+            if (detailBlend < 0f) detailBlend = 0f;
+            else if (detailBlend > 0.25f) detailBlend = 0.25f;
+            float t = detailBlend / 0.25f;
+
+            float midScale = options.sketchStructureScale > 1e-5f
+                ? options.sketchStructureScale
+                : 0.010f;
+            float midSigma = Mathf.Clamp(midScale * minDim, 5f, 28f);
+            float fineSigma = Mathf.Clamp(midSigma * 0.35f, 2.0f, 10f);
+            float broadSigma = Mathf.Clamp(midSigma * 2.4f, midSigma + 4f, 48f);
+
+            float fineUpCap = 0.004f + 0.010f * t;
+            float midUpCap = 0.010f + 0.018f * t;
+            float broadUpCap = 0.022f + 0.028f * t;
+            // 山体上的细暗坑允许幅度（与亮刺同级）；河谷靠 valleyW 绕过。
+            float fineDownCap = 0.005f + 0.012f * t;
+            float midDownCap = 0.014f + 0.022f * t;
+
+            int n = w * h;
+            var valleyRef = new float[n];
+            var midRef = new float[n];
+            Array.Copy(luminance, valleyRef, n);
+            Array.Copy(luminance, midRef, n);
+            FastGaussian(valleyRef, w, h, broadSigma);
+            FastGaussian(midRef, w, h, midSigma);
+
+            // 用「中尺度相对大尺度是否更低」区分河道走廊 vs 山体上的孤立暗坑。
+            LimitResidualValleyAware(
+                luminance, valleyRef, midRef, w, h, fineSigma, fineUpCap, fineDownCap, 0.012f, 0.055f);
+            LimitResidualValleyAware(
+                luminance, valleyRef, midRef, w, h, midSigma, midUpCap, midDownCap, 0.010f, 0.050f);
+            // 最宽一档只压亮峰；downCap 很大 ≈ 不填暗部，以免削主河谷。
+            LimitResidualValleyAware(
+                luminance, valleyRef, midRef, w, h, broadSigma, broadUpCap, 1f, 0.008f, 0.045f);
+        }
+
+        /// <summary>
+        /// out = base + clip+(r) + mix(clip-(r), r, valleyW)。
+        /// valleyW 来自 (大尺度 − 中尺度)：河道走廊为正，山体上孤立暗坑≈0。
+        /// </summary>
+        private static void LimitResidualValleyAware(
+            float[] luminance,
+            float[] valleyRef,
+            float[] midRef,
+            int w, int h,
+            float sigma,
+            float upCap,
+            float downCap,
+            float valleyLo,
+            float valleyHi)
+        {
+            int n = w * h;
+            var baseH = new float[n];
+            Array.Copy(luminance, baseH, n);
+            FastGaussian(baseH, w, h, sigma);
+
+            float vSpan = valleyHi - valleyLo;
+            if (vSpan < 1e-5f) vSpan = 1e-5f;
+
+            for (int i = 0; i < n; i++)
             {
-                bytes = File.ReadAllBytes(absolutePath);
-            }
-            catch (Exception e)
-            {
-                errorMessage = e.Message;
-                return false;
-            }
+                float src = luminance[i];
+                float residual = src - baseH[i];
 
-            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
-            try
-            {
-                if (!tex.LoadImage(bytes))
+                // 中尺度比大尺度更低 → 处于河谷网络；山体上 mid≈broad → 0。
+                float regionalValley = valleyRef[i] - midRef[i];
+                float vw = (regionalValley - valleyLo) / vSpan;
+                if (vw < 0f) vw = 0f;
+                else if (vw > 1f) vw = 1f;
+                vw = vw * vw * (3f - 2f * vw);
+
+                float signed;
+                if (residual >= 0f)
                 {
-                    errorMessage = TJGeneratorsL10n.L("无法解码图片");
-                    return false;
-                }
-
-                int w = tex.width;
-                int h = tex.height;
-                if (w <= 0 || h <= 0)
-                {
-                    errorMessage = TJGeneratorsL10n.L("图片尺寸无效");
-                    return false;
-                }
-
-                Color[] pixels = tex.GetPixels();
-                int n = pixels.Length;
-                var luminance = new float[n];
-
-                for (int i = 0; i < n; i++)
-                {
-                    Color c = pixels[i];
-                    luminance[i] = Mathf.Clamp01(0.299f * c.r + 0.587f * c.g + 0.114f * c.b);
-                }
-
-                // ── Step 1: Median 去孤立尖刺（在其他操作之前） ──────────────
-                if (options.median3x3 && w >= 3 && h >= 3)
-                    ApplyMedianFilter3x3(luminance, w, h);
-
-                // ── Step 2: 平滑（双边优先；不保边场景可退回高斯） ──────────
-                if (options.bilateralFilter && options.bilateralSigmaSpace > 1e-4f)
-                    ApplyBilateralFilter(luminance, w, h, options.bilateralSigmaSpace, options.bilateralSigmaColor);
-                else if (options.gaussianBlur && options.gaussianSigma > 1e-4f)
-                    ApplySeparableGaussianBlur(luminance, w, h, options.gaussianSigma);
-
-                // ── Step 3: 热力侵蚀（使坡度自然化） ────────────────────────
-                if (options.thermalErosion && options.thermalErosionIterations > 0)
-                    ApplyThermalErosion(luminance, w, h, options.thermalErosionIterations, options.thermalErosionTalus);
-
-                // ── Step 4: 归一化（百分位 or min-max） ──────────────────────
-                float normMin, normMax;
-                if (options.percentileNormalization)
-                {
-                    float pLow  = Mathf.Clamp01(options.percentileLow);
-                    float pHigh = Mathf.Clamp01(options.percentileHigh);
-                    if (pHigh <= pLow) pHigh = Mathf.Min(1f, pLow + 0.01f);
-                    (normMin, normMax) = ComputePercentiles(luminance, pLow, pHigh);
+                    signed = SoftClip(residual, upCap);
                 }
                 else
                 {
-                    normMin = float.MaxValue;
-                    normMax = float.MinValue;
-                    for (int i = 0; i < n; i++)
-                    {
-                        if (luminance[i] < normMin) normMin = luminance[i];
-                        if (luminance[i] > normMax) normMax = luminance[i];
-                    }
+                    float clipped = SoftClip(residual, downCap);
+                    signed = clipped + (residual - clipped) * vw;
                 }
 
-                float range = normMax - normMin;
-                float gamma = options.heightGamma > 1e-4f ? options.heightGamma : 1.0f;
-                bool applyGamma = Mathf.Abs(gamma - 1f) > 1e-4f;
+                float outH = baseH[i] + signed;
+                if (outH < 0f) outH = 0f;
+                else if (outH > 1f) outH = 1f;
+                luminance[i] = outH;
+            }
+        }
 
-                float rOutMin = Mathf.Clamp01(options.remapOutputMin);
-                float rOutMax = Mathf.Clamp01(options.remapOutputMax);
-                if (rOutMax < rOutMin + 1e-5f)
-                    rOutMax = Mathf.Min(1f, rOutMin + 0.01f);
+        /// <summary>对称软裁剪：保留符号，幅度不超过 cap。</summary>
+        private static float SoftClip(float v, float cap)
+        {
+            if (cap < 1e-5f) return 0f;
+            return cap * (float)Math.Tanh(v / cap);
+        }
 
-                var outColors = new Color[n];
-                for (int i = 0; i < n; i++)
+        /// <summary>三次方框模糊近似高斯，半径无关 O(n)，适合大 σ 结构/光照估计。</summary>
+        private static void FastGaussian(float[] data, int w, int h, float sigma)
+        {
+            if (sigma < 0.2f || w < 2 || h < 2)
+                return;
+
+            float wIdeal = (float)Math.Sqrt(12.0 * sigma * sigma / 3.0 + 1.0);
+            int wl = (int)Math.Floor(wIdeal);
+            if ((wl & 1) == 0) wl--;
+            int r = (wl - 1) / 2;
+            int maxR = Math.Max(1, Math.Min(w, h) / 2 - 1);
+            if (r < 1) r = 1;
+            if (r > maxR) r = maxR;
+
+            var tmp = new float[w * h];
+            for (int pass = 0; pass < 3; pass++)
+            {
+                BoxBlurHorizontal(data, tmp, w, h, r);
+                BoxBlurVertical(tmp, data, w, h, r);
+            }
+        }
+
+        private static void BoxBlurHorizontal(float[] src, float[] dst, int w, int h, int r)
+        {
+            var prefix = new float[w + 1];
+            float inv = 1f / (2 * r + 1);
+            for (int y = 0; y < h; y++)
+            {
+                int row = y * w;
+                prefix[0] = 0f;
+                for (int x = 0; x < w; x++)
+                    prefix[x + 1] = prefix[x] + src[row + x];
+
+                for (int x = 0; x < w; x++)
                 {
-                    float t = range > 1e-5f ? (luminance[i] - normMin) / range : 0.5f;
-                    t = Mathf.Clamp01(t);
-                    if (applyGamma)
-                        t = Mathf.Pow(t, gamma);
-                    t = Mathf.Lerp(rOutMin, rOutMax, t);
-                    outColors[i] = new Color(t, t, t, 1f);
+                    int x0 = x - r;
+                    int x1 = x + r;
+                    float sum = 0f;
+                    if (x0 < 0)
+                    {
+                        sum += src[row] * (-x0);
+                        x0 = 0;
+                    }
+                    if (x1 >= w)
+                    {
+                        sum += src[row + w - 1] * (x1 - (w - 1));
+                        x1 = w - 1;
+                    }
+                    sum += prefix[x1 + 1] - prefix[x0];
+                    dst[row + x] = sum * inv;
                 }
-
-                UnityEngine.Object.DestroyImmediate(tex);
-                tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
-                tex.SetPixels(outColors);
-                tex.Apply(false, false);
-
-                File.WriteAllBytes(absolutePath, tex.EncodeToPNG());
-                return true;
             }
-            catch (Exception e)
+        }
+
+        private static void BoxBlurVertical(float[] src, float[] dst, int w, int h, int r)
+        {
+            var prefix = new float[h + 1];
+            float inv = 1f / (2 * r + 1);
+            for (int x = 0; x < w; x++)
             {
-                errorMessage = e.Message;
-                return false;
-            }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(tex);
+                prefix[0] = 0f;
+                for (int y = 0; y < h; y++)
+                    prefix[y + 1] = prefix[y] + src[y * w + x];
+
+                for (int y = 0; y < h; y++)
+                {
+                    int y0 = y - r;
+                    int y1 = y + r;
+                    float sum = 0f;
+                    if (y0 < 0)
+                    {
+                        sum += src[x] * (-y0);
+                        y0 = 0;
+                    }
+                    if (y1 >= h)
+                    {
+                        sum += src[(h - 1) * w + x] * (y1 - (h - 1));
+                        y1 = h - 1;
+                    }
+                    sum += prefix[y1 + 1] - prefix[y0];
+                    dst[y * w + x] = sum * inv;
+                }
             }
         }
 

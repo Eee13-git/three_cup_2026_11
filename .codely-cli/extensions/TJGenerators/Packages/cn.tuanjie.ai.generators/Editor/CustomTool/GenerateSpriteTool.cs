@@ -1,7 +1,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Codely.Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -13,7 +12,6 @@ using TJGenerators.Generators;
 using TJGenerators.Config;
 using TJGenerators.Pipeline;
 using TJGenerators.Utils;
-using Unity.EditorCoroutines.Editor;
 #endif
 
 namespace UnityTcp.Editor.Tools
@@ -108,26 +106,6 @@ namespace UnityTcp.Editor.Tools
         internal static void ApplyTaskUpdate(SpriteTaskInfo task, Action<SpriteTaskInfo> mutate) =>
             Store.ApplyTaskUpdate(task, mutate);
 
-        public static string CreateTask(string generatorId, string prompt, string imagePath = null, string typeId = null, string styleId = null, string placeholderPath = null, string backendTaskId = null)
-        {
-            string taskId = Store.AllocateTaskId("sprite");
-            var task = new SpriteTaskInfo
-            {
-                TaskId          = taskId,
-                GeneratorId     = generatorId,
-                Prompt          = prompt ?? "",
-                ImagePath       = imagePath ?? "",
-                TypeId          = typeId ?? "",
-                StyleId         = styleId ?? "",
-                Status          = "generating",
-                StartTime       = DateTime.Now,
-                PlaceholderPath = placeholderPath,
-                BackendTaskId   = backendTaskId
-            };
-            Store.RegisterTask(taskId, task);
-            return taskId;
-        }
-
         public static void MarkTaskCompleted(string taskId, string spritePath, string previewUrl = null)
         {
             var task = Store.GetTask(taskId);
@@ -185,206 +163,9 @@ namespace UnityTcp.Editor.Tools
 #endif
     }
 
-    /// <summary>
-    /// CustomTool for generating 2D sprite assets using TJGenerators Sprite pipeline (Huoshan SeeDream).
-    /// Supports text-to-sprite and image-to-sprite generation with content type and art style selection.
-    /// Output is a PNG imported as Sprite (Texture2D) saved to Assets/TJGenerators/History/.
-    /// </summary>
+    // Previous versions persist sprite tasks across editor reloads.
     public static class GenerateSpriteTool
     {
-        [ExecuteCustomTool.CustomTool("generate_sprite",
-            "Generate a 2D sprite (game icon, item image, UI element, character portrait) from a text prompt " +
-            "or reference image using AI. Output is a PNG imported as a Unity Sprite asset, saved to Assets/TJGenerators/History/. " +
-            "Key parameters: generator_id (default 'frontier-game-design'; also 'huoshan_seedream', 'frontier-effect'), prompt (text description), " +
-            "image_path (optional reference image), type_id (content type, e.g. 'weapon_melee', 'ui_icon'), " +
-            "style_id (art style, e.g. 'pixel', 'anime', 'cartoon'), size (output resolution), " +
-            "is_segmentation (bool, auto-remove background, default true), output_path (optional save path), " +
-            "imageSize (frontier-game-design only, 'square_hd'/'square'/'portrait_4_3'/'portrait_16_9'/'landscape_4_3'/'landscape_16_9', default 'square_hd'), " +
-            "outputFormat (frontier-game-design only, 'png'/'jpeg', default 'png'). " +
-            "IMPORTANT: Generation takes 1-3 minutes. Wait at least 5 seconds before the first query_local_task call, " +
-            "then poll every 10-15 seconds. A placeholder_path is returned immediately — you can assign it to a SpriteRenderer right away.")]
-        public static object GenerateSprite(JObject parameters)
-        {
-#if UNITY_EDITOR
-            try
-            {
-                TJLog.Log($"[GenerateSpriteTool] Generating sprite with parameters: {parameters}");
-
-                string generatorId = parameters["generator_id"]?.ToString() ?? "huoshan_seedream";
-                string prompt = parameters["prompt"]?.ToString();
-                string imagePath = parameters["image_path"]?.ToString();
-                string typeId = parameters["type_id"]?.ToString();
-                string styleId = parameters["style_id"]?.ToString();
-                string outputPath = parameters["output_path"]?.ToString();
-                string sessionId = parameters["session_id"]?.ToString() ?? "";
-                GenerationRequestOrigin.SetWorkspaceName(parameters["workspace_name"]?.ToString());
-
-                if (string.IsNullOrEmpty(prompt) && string.IsNullOrEmpty(imagePath))
-                {
-                    return new Dictionary<string, object>
-                    {
-                        { "success", false },
-                        { "message", "Either 'prompt' or 'image_path' must be provided" }
-                    };
-                }
-
-                int maxLen = TJGeneratorsPromptLimits.GetMaxLength(generatorId);
-                if (maxLen > 0 && !string.IsNullOrEmpty(prompt) && prompt.Length > maxLen)
-                {
-                    return new Dictionary<string, object>
-                    {
-                        { "success", false },
-                        { "error_code", "INVALID_PARAMS" },
-                        { "message", $"Prompt length ({prompt.Length}) exceeds the {maxLen} character limit for '{generatorId}'." }
-                    };
-                }
-
-                // Load sprite generator config
-                var config = ConfigManager.GetGeneratorConfig(ConfigType.Sprite, generatorId);
-                if (config == null)
-                {
-                    return new Dictionary<string, object>
-                    {
-                        { "success", false },
-                        { "message", $"Cannot find sprite generator config for '{generatorId}'. Valid values: 'frontier-game-design', 'huoshan_seedream', 'frontier-effect'." }
-                    };
-                }
-
-                // Create generator and set inputs
-                var generator = new DynamicGenerator(config);
-
-                if (!string.IsNullOrEmpty(prompt))
-                    generator.SetTextPrompt(prompt);
-
-                if (!string.IsNullOrEmpty(imagePath))
-                    generator.SetImagePath(imagePath);
-
-                // Resolve and apply type/style selections
-                if (!string.IsNullOrEmpty(typeId))
-                {
-                    var typeOption = FindTypeOption(config, typeId);
-                    if (typeOption != null)
-                        generator.SetTypeSelection(typeOption);
-                    else
-                        TJLog.LogWarning($"[GenerateSpriteTool] type_id '{typeId}' not found in config, ignoring.");
-                }
-
-                if (!string.IsNullOrEmpty(styleId))
-                {
-                    var styleOption = FindStyleOption(config, styleId);
-                    if (styleOption != null)
-                        generator.SetStyleSelection(styleOption);
-                    else
-                        TJLog.LogWarning($"[GenerateSpriteTool] style_id '{styleId}' not found in config, ignoring.");
-                }
-
-                // Apply optional parameters
-                ApplySpriteParameters(generator, parameters);
-
-                // 阶段1：同步提交任务到后端，立即获取 backendTaskId 或失败原因
-                var submitResult = TJGeneratorsGenerationService.SubmitTaskSync(generator, sessionId);
-                if (!submitResult.Success)
-                {
-                    TJLog.LogError($"[GenerateSpriteTool] 任务提交失败 [{submitResult.ErrorCode}]: {submitResult.Message}");
-                    return new Dictionary<string, object>
-                    {
-                        { "success",    false },
-                        { "error_code", submitResult.ErrorCode },
-                        { "message",    submitResult.Message }
-                    };
-                }
-
-                TJLog.Log($"[GenerateSpriteTool] 任务提交成功，backend_task_id={submitResult.BackendTaskId}");
-
-                // 提交成功后才创建 placeholder（避免在鉴权失败时留下无用文件）
-                string placeholderPath = CreatePlaceholderTexture(outputPath);
-
-                // Create tracked task
-                string capturedBackendTaskId = submitResult.BackendTaskId;
-                string taskId = SpriteTaskTracker.CreateTask(generatorId, prompt, imagePath, typeId, styleId, placeholderPath, capturedBackendTaskId);
-
-                // Create pipeline host
-                var host = new SpritePipelineHost(placeholderPath, sessionId,
-                    (savedPath, previewUrl) =>
-                    {
-                        SpriteTaskTracker.MarkTaskCompleted(taskId, savedPath, previewUrl);
-                        var t = SpriteTaskTracker.GetTask(taskId);
-                        GenerationNotifier.NotifyCompleted("generate_sprite", taskId, capturedBackendTaskId,
-                            new JObject
-                            {
-                                ["session_id"]       = sessionId,
-                                ["generator_id"]     = generatorId,
-                                ["prompt"]           = prompt ?? "",
-                                ["image_path"]       = savedPath,
-                                ["preview_url"]      = previewUrl ?? "",
-                                ["progress"]         = 100,
-                                ["start_time"]       = t?.StartTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "",
-                                ["end_time"]         = t?.EndTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "",
-                                ["duration_seconds"] = (t != null && t.EndTime.HasValue) ? (int)(t.EndTime.Value - t.StartTime).TotalSeconds : 0
-                            });
-                    },
-                    errorMsg =>
-                    {
-                        SpriteTaskTracker.MarkTaskFailed(taskId, errorMsg);
-                        GenerationNotifier.NotifyFailed("generate_sprite", taskId, capturedBackendTaskId, errorMsg,
-                            new JObject { ["session_id"] = sessionId, ["generator_id"] = generatorId, ["prompt"] = prompt ?? "" });
-                    });
-
-                string historyAssetGuid = CustomToolHistoryBindings.HistoryGuidFromPlaceholderAssetPath(placeholderPath);
-
-                // 阶段2：异步轮询（跳过提交）
-                var pipeline = new GenerationPipeline(host, ConfigType.Sprite, GenerationRequestOrigin.Agent, sessionId, "generate_sprite");
-                EditorCoroutineUtility.StartCoroutineOwnerless(
-                    pipeline.StartFromSubmittedTask(generator, historyAssetGuid, submitResult.BackendTaskId));
-
-                TJLog.Log($"[GenerateSpriteTool] 轮询已启动，task_id={taskId}, backend_task_id={submitResult.BackendTaskId}, placeholder: {placeholderPath}");
-
-                var result = new Dictionary<string, object>
-                {
-                    { "success",            true },
-                    { "submission_success", true },
-                    { "message",
-                        "Sprite generation started. " +
-                        "STEP 1 (do now): Call activate_skill(\"unity-place-assets-in-scene\"), then use exec_editor_script as instructed to apply placeholder_path to a SpriteRenderer. " +
-                        "STEP 2 (critical): Keep this worker active until the task is terminal and its assets are verified. " +
-                        "STEP 3: A <bg_task_done> notification may arrive (~90s) " +
-                        "containing ALL generation results (image_path, preview_url, timing, etc.). " +
-                        "Wait up to 30 seconds in the current worker, then call query_local_task once; repeat only while pending. " +
-                        "Do not busy-poll query_local_task, submit again, or report success while pending." },
-                    { "task_id",            taskId },
-                    { "backend_task_id",    submitResult.BackendTaskId },
-                    { "status",             "submitted" },
-                    { "generator_id",       generatorId },
-                    { "prompt",             prompt ?? "" },
-                    { "placeholder_path",   placeholderPath },
-                    { "estimated_wait_seconds", 90 },
-                    { "preview_url",        PreviewUrlHelper.BuildFixedPreviewUrl(submitResult.BackendTaskId) },
-                    { "notification_mode",  "bg_task_done" }
-                };
-
-                if (!string.IsNullOrEmpty(typeId)) result["type_id"] = typeId;
-                if (!string.IsNullOrEmpty(styleId)) result["style_id"] = styleId;
-
-                return result;
-            }
-            catch (Exception e)
-            {
-                TJLog.LogError($"[GenerateSpriteTool] Error: {e}");
-                return new Dictionary<string, object>
-                {
-                    { "success", false },
-                    { "message", $"Error generating sprite: {e.Message}" }
-                };
-            }
-#else
-            return new Dictionary<string, object>
-            {
-                { "success", false },
-                { "message", "This tool only works in Unity Editor." }
-            };
-#endif
-        }
-
         public static object QuerySpriteStatus(JObject parameters)
         {
 #if UNITY_EDITOR
@@ -516,89 +297,6 @@ namespace UnityTcp.Editor.Tools
 #endif
         }
 
-#if UNITY_EDITOR
-        private static void EnsureAssetDatabaseFolder(string folderPath)
-        {
-            folderPath = folderPath.Replace('\\', '/').TrimEnd('/');
-            string[] parts = folderPath.Split('/');
-            string current = parts[0]; // "Assets"
-            for (int i = 1; i < parts.Length; i++)
-            {
-                string next = current + "/" + parts[i];
-                if (!AssetDatabase.IsValidFolder(next))
-                    AssetDatabase.CreateFolder(current, parts[i]);
-                current = next;
-            }
-        }
-
-        private static string CreatePlaceholderTexture(string outputPath)
-        {
-            string placeholderPath;
-            if (!string.IsNullOrEmpty(outputPath))
-            {
-                string dir = Path.GetDirectoryName(outputPath)?.Replace('\\', '/');
-                if (!string.IsNullOrEmpty(dir))
-                    EnsureAssetDatabaseFolder(dir);
-                placeholderPath = AssetDatabase.GenerateUniqueAssetPath(
-                    Path.ChangeExtension(outputPath, ".png"));
-            }
-            else
-            {
-                if (!AssetDatabase.IsValidFolder("Assets/TJGenerators"))
-                    AssetDatabase.CreateFolder("Assets", "TJGenerators");
-                if (!AssetDatabase.IsValidFolder("Assets/TJGenerators/History"))
-                    AssetDatabase.CreateFolder("Assets/TJGenerators", "History");
-                string uniqueName = "Sprite_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".png";
-                placeholderPath = AssetDatabase.GenerateUniqueAssetPath("Assets/TJGenerators/History/" + uniqueName);
-            }
-
-            // Create 1x1 gray placeholder PNG
-            var tex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-            tex.SetPixel(0, 0, new Color(0.5f, 0.5f, 0.5f, 1f));
-            tex.Apply();
-            byte[] pngBytes = tex.EncodeToPNG();
-            UnityEngine.Object.DestroyImmediate(tex);
-
-            string absolutePath = PathUtils.ToAbsoluteAssetPath(placeholderPath);
-            File.WriteAllBytes(absolutePath, pngBytes);
-            PathUtils.ImportAssetAfterDiskWrite(placeholderPath);
-            GeneratedTextureImportUtils.ConfigureImportedTexture(
-                placeholderPath, TextureImporterType.Sprite, alphaIsTransparency: true);
-
-            return placeholderPath;
-        }
-
-        private static SelectorOptionConfig FindTypeOption(GeneratorConfig config, string typeId)
-        {
-            return config.typeSelector?.options?.FirstOrDefault(o => o.id == typeId);
-        }
-
-        private static SelectorOptionConfig FindStyleOption(GeneratorConfig config, string styleId)
-        {
-            return config.styleSelector?.options?.FirstOrDefault(o => o.id == styleId);
-        }
-
-        private static void ApplySpriteParameters(DynamicGenerator generator, JObject parameters)
-        {
-            if (parameters["is_segmentation"] != null)
-                generator.SetParameter("isSegmentation", parameters["is_segmentation"].ToObject<bool>());
-
-            if (parameters["size"] != null)
-                generator.SetParameter("size", parameters["size"].ToString());
-
-            if (parameters["q_value"] != null)
-                generator.SetParameter("qValue", parameters["q_value"].ToObject<int>());
-
-            if (parameters["resize_width"] != null)
-                generator.SetParameter("resizeWidth", parameters["resize_width"].ToObject<int>());
-
-            if (parameters["imageSize"] != null)
-                generator.SetParameter("imageSize", parameters["imageSize"].ToString());
-
-            if (parameters["outputFormat"] != null)
-                generator.SetParameter("outputFormat", parameters["outputFormat"].ToString());
-        }
-#endif
     }
 
 #if UNITY_EDITOR
@@ -759,60 +457,5 @@ namespace UnityTcp.Editor.Tools
         }
     }
 
-    /// <summary>
-    /// IGenerationPipelineHost implementation for headless sprite generation via custom tools.
-    /// Handles texture saving with Sprite import settings and task lifecycle callbacks.
-    /// </summary>
-    internal class SpritePipelineHost : HeadlessPipelineHostBase, IMediaAssetPipelineHost
-    {
-        private readonly string _placeholderPath;
-        private readonly TJGeneratorsAssetReference _placeholderRef;
-        private readonly string _sessionId;
-        private readonly Action<string, string> _onCompleted;
-        private readonly Action<string> _onFailed;
-
-        public SpritePipelineHost(string placeholderPath, string sessionId, Action<string, string> onCompleted, Action<string> onFailed)
-        {
-            _placeholderPath = placeholderPath;
-            _placeholderRef = TJGeneratorsAssetReference.FromPath(placeholderPath);
-            _sessionId = sessionId ?? "";
-            _onCompleted = onCompleted;
-            _onFailed = onFailed;
-        }
-
-        protected override string DialogLogTag => "GenerateSpriteTool";
-        protected override Action<string> DialogFailedCallback => errorMessage => _onFailed?.Invoke(errorMessage);
-
-        public override TJGeneratorsAssetReference GetTargetAsset() => _placeholderRef;
-
-        public void StartEditorCoroutine(IEnumerator coroutine)
-        {
-            EditorCoroutineUtility.StartCoroutineOwnerless(coroutine);
-        }
-
-        public string GetAssetSavePath(PipelineMediaType _type, ModelGeneratorBase generator)
-        {
-            if (_type != PipelineMediaType.Texture) return null;
-
-            // Return the placeholder path directly — pipeline overwrites the file bytes in-place.
-            // Do NOT delete the placeholder: deleting would assign a new GUID on reimport,
-            // breaking any SpriteRenderer references set up before generation completed.
-            return _placeholderPath;
-        }
-
-        public void OnAssetSaved(PipelineMediaType _type, string savePath, ModelGeneratorBase generator)
-        {
-            if (_type != PipelineMediaType.Texture) return;
-
-            TJLog.Log($"[GenerateSpriteTool] Sprite saved: {savePath}");
-
-            GeneratedTextureImportUtils.ConfigureImportedTexture(
-                savePath, TextureImporterType.Sprite, alphaIsTransparency: true);
-
-            TJGeneratorsGenerationLabel.EnableLabel(TJGeneratorsAssetReference.FromPath(savePath));
-            TJGeneratorsGenerationLabel.EnableSessionLabel(TJGeneratorsAssetReference.FromPath(savePath), _sessionId);
-            _onCompleted?.Invoke(savePath, generator.CurrentPreviewUrl);
-        }
-    }
 #endif
 }

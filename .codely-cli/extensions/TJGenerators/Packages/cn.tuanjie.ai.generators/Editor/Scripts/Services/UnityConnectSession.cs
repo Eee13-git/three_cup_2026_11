@@ -20,42 +20,31 @@ namespace Unity.UniAsset.Manager.Editor.InternalBridge
         
         public string GetAccessToken()
         {
-            // 优先使用已换票成功的 Codely token 缓存（覆盖 Unity token 过期但非空的场景）
-            string cachedToken = CodelyTokenProvider.CachedAccessToken;
-            if (!string.IsNullOrEmpty(cachedToken))
-                return cachedToken;
+            string codely = ReadCodelyToken();
+            if (!string.IsNullOrEmpty(codely))
+                return codely;
 
-            // Fallback: 优先读取 ~/.codely-cli/oauth_creds.json 中的 JWT token
-            string fallbackToken = ReadFallbackToken();
-            if (!string.IsNullOrEmpty(fallbackToken))
-            {
-#if TJGENERATORS_DEBUG
-                UnityEngine.Debug.Log($"[UnityConnectSession] Using fallback JWT token from ~/.codely-cli/oauth_creds.json, token: {fallbackToken}");
-#endif
-                return fallbackToken;
-            }
-
-            // 最后兜底：使用反射获取 UnityConnect 的访问令牌
-            string rawToken = GetRawAccessToken();
-            if (!string.IsNullOrEmpty(rawToken))
-                return rawToken;
-
-            return "";
+            string editor = GetRawAccessToken();
+            return CodelyTokenProvider.GetCachedExchange(editor) ?? editor;
         }
 
-        public string GetOrgId()
-        {
-            // Fallback: 读取 ~/.codely-cli/oauth_creds.json 中的 user_id，再从 org.json 获取 currentOrgId
-            string fallbackOrgId = ReadFallbackOrgId();
-            if (!string.IsNullOrEmpty(fallbackOrgId))
-            {
-#if TJGENERATORS_DEBUG
-                UnityEngine.Debug.Log($"[UnityConnectSession] Using fallback orgId from ~/.codely-cli/org.json, orgId: {fallbackOrgId}");
-#endif
-                return fallbackOrgId;
-            }
+        public string GetOrgId() => GetOrgId(GetAccessToken());
 
-            return "";
+        // The org selection belongs to the account in the same CLI credential file.
+        public string GetOrgId(string accessToken)
+        {
+            if (string.IsNullOrEmpty(accessToken)) return "";
+            try
+            {
+                string dir = GetCodelyDirectory();
+                var creds = ReadJson(Path.Combine(dir, OAuthCredsFile));
+                if ((string)creds?["access_token"] != accessToken) return "";
+                string userId = (string)creds["user_id"];
+                if (string.IsNullOrEmpty(userId)) return "";
+                var orgs = ReadJson(Path.Combine(dir, OrgFile));
+                return (string)orgs?["accounts"]?[userId]?["currentOrgId"] ?? "";
+            }
+            catch (System.Exception) { return ""; }
         }
 
         /// <summary>
@@ -151,77 +140,34 @@ namespace Unity.UniAsset.Manager.Editor.InternalBridge
             }
         }
 
-        /// <summary>
-        /// 从用户主目录下 ~/.codely-cli/oauth_creds.json 读取 fallback JWT token。
-        /// 兼容 Windows 与 macOS：优先 UserProfile，fallback 读 HOME 环境变量。
-        /// </summary>
-        internal static string ReadFallbackToken()
+        private static string GetCodelyDirectory()
         {
-            try
-            {
-                string homeDir = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
-                if (string.IsNullOrEmpty(homeDir))
-                    homeDir = System.Environment.GetEnvironmentVariable("HOME");
-                if (string.IsNullOrEmpty(homeDir))
-                    return null;
-
-                string credsPath = Path.Combine(homeDir, CodelyCliDir, OAuthCredsFile);
-                if (!File.Exists(credsPath))
-                    return null;
-
-                string json = File.ReadAllText(credsPath);
-                JObject data = JObject.Parse(json);
-                string token = data["access_token"]?.ToString();
-                return string.IsNullOrEmpty(token) ? null : token;
-            }
-            catch
-            {
-                return null;
-            }
+            string home = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrEmpty(home)) home = System.Environment.GetEnvironmentVariable("HOME");
+            string configured = System.Environment.GetEnvironmentVariable("CODELY_CLI_HOME")?.Trim();
+            if (string.IsNullOrEmpty(home)) home = Path.GetTempPath();
+            if (string.IsNullOrEmpty(configured)) return Path.Combine(home, CodelyCliDir);
+            if (configured == "~") return home;
+            if (configured.StartsWith("~/") || configured.StartsWith(@"~\")) return Path.Combine(home, configured.Substring(2));
+            return Path.GetFullPath(configured);
         }
 
-        /// <summary>
-        /// 从 ~/.codely-cli/oauth_creds.json 读取 user_id，再用 user_id 查找同目录下 org.json
-        /// 中 accounts.{userId}.currentOrgId，返回 currentOrgId。
-        /// 兼容 Windows 与 macOS：优先 UserProfile，fallback 读 HOME 环境变量。
-        /// </summary>
-        internal static string ReadFallbackOrgId()
+        private static JObject ReadJson(string path) =>
+            File.Exists(path) ? JObject.Parse(File.ReadAllText(path)) : null;
+
+        internal static string ReadCodelyToken()
         {
+            string explicitToken = System.Environment.GetEnvironmentVariable("CODELY_TOKEN")?.Trim();
+            if (!string.IsNullOrEmpty(explicitToken)) return explicitToken;
             try
             {
-                string homeDir = System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile);
-                if (string.IsNullOrEmpty(homeDir))
-                    homeDir = System.Environment.GetEnvironmentVariable("HOME");
-                if (string.IsNullOrEmpty(homeDir))
+                var creds = ReadJson(Path.Combine(GetCodelyDirectory(), OAuthCredsFile));
+                long? expires = (long?)creds?["expiry_date"];
+                if (expires.HasValue && expires.Value <= System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
                     return null;
-
-                string codelyDir = Path.Combine(homeDir, CodelyCliDir);
-
-                // Step 1: 从 oauth_creds.json 读取 user_id
-                string credsPath = Path.Combine(codelyDir, OAuthCredsFile);
-                if (!File.Exists(credsPath))
-                    return null;
-
-                string credsJson = File.ReadAllText(credsPath);
-                JObject credsData = JObject.Parse(credsJson);
-                string userId = credsData["user_id"]?.ToString();
-                if (string.IsNullOrEmpty(userId))
-                    return null;
-
-                // Step 2: 用 user_id 查找 org.json 中 accounts.{userId}.currentOrgId
-                string orgPath = Path.Combine(codelyDir, OrgFile);
-                if (!File.Exists(orgPath))
-                    return null;
-
-                string orgJson = File.ReadAllText(orgPath);
-                JObject orgData = JObject.Parse(orgJson);
-                string orgId = orgData["accounts"]?[userId]?["currentOrgId"]?.ToString();
-                return string.IsNullOrEmpty(orgId) ? null : orgId;
+                return ((string)creds?["access_token"])?.Trim();
             }
-            catch
-            {
-                return null;
-            }
+            catch (System.Exception) { return null; }
         }
     }
-} 
+}

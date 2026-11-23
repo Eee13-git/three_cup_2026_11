@@ -202,7 +202,7 @@ namespace UnityTcp.Editor.Tools
 
     /// <summary>
     /// Internal machinery for splitting one image into multiple RGBA layers — CustomTool registrations
-    /// moved to the MCP backend (generate_image_layers); kept because generate_game_ui_kit's seedream
+    /// moved to the MCP backend (generate_image_layers); kept for previously submitted UI kits whose Seedream
     /// layer-decomposition step reuses the tracker / pipeline hosts / layer finalization, and legacy
     /// in-flight tasks are still resumed by ImageLayersDomainReloadRecovery.
     /// </summary>

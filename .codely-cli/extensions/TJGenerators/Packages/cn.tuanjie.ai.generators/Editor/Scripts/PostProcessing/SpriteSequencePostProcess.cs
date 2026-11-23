@@ -66,14 +66,8 @@ namespace TJGenerators.PostProcessing
                 if (cutout == null)
                     throw new InvalidOperationException("Green-screen cutout failed.");
 
-                if (writeCutoutBackToAsset && !string.IsNullOrEmpty(assetPath))
-                {
-                    string absolutePath = PathUtils.ToAbsoluteAssetPath(assetPath);
-                    File.WriteAllBytes(absolutePath, cutout.EncodeToPNG());
-                    AssetDatabase.ImportAsset(assetPath, ImportAssetOptions.ForceUpdate);
-                }
-
-                return SliceTextureToSpritesAndAnimation(cutout, assetPath, cols, rows, fps, loop);
+                return SliceTextureToSpritesAndAnimation(cutout, assetPath, cols, rows, fps, loop,
+                    writeCutoutBackToAsset);
             }
             finally
             {
@@ -148,12 +142,34 @@ namespace TJGenerators.PostProcessing
             bool loop
         )
         {
+            return SliceTextureToSpritesAndAnimation(sourceTexture, sourceAssetPath, cols, rows, fps, loop,
+                writeCutoutBackToAsset: false);
+        }
+
+        private static SliceResult SliceTextureToSpritesAndAnimation(
+            Texture2D sourceTexture,
+            string sourceAssetPath,
+            int cols,
+            int rows,
+            float fps,
+            bool loop,
+            bool writeCutoutBackToAsset)
+        {
             cols = Mathf.Max(1, cols);
             rows = Mathf.Max(1, rows);
             int frameW = sourceTexture.width / cols;
             int frameH = sourceTexture.height / rows;
             if (frameW <= 0 || frameH <= 0)
                 throw new InvalidOperationException("Slice rows/columns exceed image dimensions.");
+
+            EnsureTransparentGridRemainder(sourceTexture, frameW * cols, frameH * rows);
+
+            if (writeCutoutBackToAsset && !string.IsNullOrEmpty(sourceAssetPath))
+            {
+                string absolutePath = PathUtils.ToAbsoluteAssetPath(sourceAssetPath);
+                File.WriteAllBytes(absolutePath, sourceTexture.EncodeToPNG());
+                AssetDatabase.ImportAsset(sourceAssetPath, ImportAssetOptions.ForceUpdate);
+            }
 
             string outputDir = CreateSpriteSliceOutputFolder(sourceAssetPath);
             var spriteAssetPaths = new List<string>();
@@ -208,6 +224,25 @@ namespace TJGenerators.PostProcessing
                 AnimationClipPath = clipPath,
                 ExportedCount = exported
             };
+        }
+
+        private static void EnsureTransparentGridRemainder(Texture2D texture, int slicedWidth, int slicedHeight)
+        {
+            int unusedBottom = texture.height - slicedHeight;
+            if (slicedWidth == texture.width && unusedBottom == 0)
+                return;
+
+            // The fixed grid starts in the upper-left. Remainder pixels can only be on the right or bottom.
+            Color32[] pixels = texture.GetPixels32();
+            for (int y = 0; y < texture.height; y++)
+            {
+                int firstUnusedX = y < unusedBottom ? 0 : slicedWidth;
+                for (int x = firstUnusedX; x < texture.width; x++)
+                    if (pixels[y * texture.width + x].a != 0)
+                        throw new InvalidOperationException(
+                            "Sprite sheet has nontransparent pixels outside the slice grid. " +
+                            "Use matching grid dimensions or add transparent padding.");
+            }
         }
 
         private static string CreateSpriteSliceOutputFolder(string sourceAssetPath)

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.28] - 2026-11-20
+
+### Added
+
+- TJGenerators 扩展内置 Generators Surface，支持在普通工作区及 Unity、团结项目中查看生成历史、预览和对比产物、编辑对话流程及重抽和重跑。
+- Cowork Agent 可操作当前对话的 Surface，并在多项生成完成后打开本次对话的产物历史或相关流程。
+
 ## [1.0.27] - 2026-10-14
 
 ### Added

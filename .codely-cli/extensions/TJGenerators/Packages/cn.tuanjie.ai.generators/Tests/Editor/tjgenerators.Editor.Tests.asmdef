@@ -6,7 +6,8 @@
         "UnityEditor.TestRunner",
         "tjgenerators.Editor",
         "TJGenerators.Runtime",
-        "UnityTcp.CustomTool"
+        "UnityTcp.CustomTool",
+        "UnityTcp.Editor"
     ],
     "includePlatforms": [
         "Editor"

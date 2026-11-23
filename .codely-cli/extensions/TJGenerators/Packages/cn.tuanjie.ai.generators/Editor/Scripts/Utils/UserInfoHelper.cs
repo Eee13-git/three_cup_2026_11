@@ -34,7 +34,7 @@ namespace TJGenerators.Utils
                 string token = UnityConnectSession.instance.GetAccessToken();
                 if (!string.IsNullOrEmpty(token))
                     uwr.SetRequestHeader("Authorization", $"Bearer {token}");
-                uwr.SetRequestHeader("orgId", UnityConnectSession.instance.GetOrgId());
+                uwr.SetRequestHeader("orgId", UnityConnectSession.instance.GetOrgId(token));
                 uwr.SetRequestHeader("source", "codely");
 
                 yield return uwr.SendWebRequest();

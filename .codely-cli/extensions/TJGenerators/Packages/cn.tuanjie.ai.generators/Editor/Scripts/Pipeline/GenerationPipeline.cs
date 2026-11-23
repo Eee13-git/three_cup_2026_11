@@ -77,6 +77,7 @@ namespace TJGenerators.Pipeline
 
         /// <summary>「添加动作」后处理成功时，绑骨后的主模型 Unity 路径（供绑定 Prefab）。</summary>
         private string _postMotionRiggedPath;
+        private string _postMotionError;
 
         private static class TaskStatus
         {
@@ -849,21 +850,31 @@ namespace TJGenerators.Pipeline
                 yield return DownloadRenderedImage(renderedImageUrl, renderedTexturePath);
             }
 
+            var importOptions = _host as IModelImportOptionsProvider;
+            bool isMotionOnly = importOptions?.IsMotionOnlyImport == true;
+
             if (isFBX)
             {
-                ModelPostProcessing(finalModelPath, renderedTexturePath);
-                PathUtils.ImportAssetAfterDiskWrite(finalModelPath);
-
-                if (!ValidateImportedFbxMesh(finalModelPath, out string meshReason))
+                if (!isMotionOnly)
                 {
-                    TJLog.LogError(
-                        $"[GenerationPipeline] FBX 网格校验失败（{meshReason}）: {finalModelPath}"
-                    );
-                    HandleError(
-                        generator,
-                        TJGeneratorsL10n.L("模型文件损坏（顶点数为0），请重试生成")
-                    );
-                    yield break;
+                    ModelPostProcessing(finalModelPath, renderedTexturePath);
+                    PathUtils.ImportAssetAfterDiskWrite(finalModelPath);
+
+                    if (!ValidateImportedFbxMesh(finalModelPath, out string meshReason))
+                    {
+                        TJLog.LogError(
+                            $"[GenerationPipeline] FBX 网格校验失败（{meshReason}）: {finalModelPath}"
+                        );
+                        HandleError(
+                            generator,
+                            TJGeneratorsL10n.L("模型文件损坏（顶点数为0），请重试生成")
+                        );
+                        yield break;
+                    }
+                }
+                else
+                {
+                    PathUtils.ImportAssetAfterDiskWrite(finalModelPath);
                 }
             }
 
@@ -893,7 +904,8 @@ namespace TJGenerators.Pipeline
 
             // 混元 Motion 等：动画面片在单一主 FBX 内时，从主 FBX 建单状态自循环控制器
             if (
-                _pipelineSettings.GetPostProcessingSingleClipLoopAnimatorController()
+                !isMotionOnly
+                && _pipelineSettings.GetPostProcessingSingleClipLoopAnimatorController()
                 && finalModelPath.EndsWith(".fbx", StringComparison.OrdinalIgnoreCase)
                 && !generator.GetAddMotionEnabled()
             )
@@ -918,18 +930,33 @@ namespace TJGenerators.Pipeline
                     generator.GetMotionDescription(),
                     renderedTexturePath
                 );
+                if (!string.IsNullOrEmpty(_postMotionError))
+                {
+                    HandleError(generator, _postMotionError + $"\n已保留模型: {finalModelPath}");
+                    yield break;
+                }
                 if (!string.IsNullOrEmpty(_postMotionRiggedPath))
                     modelPathForBind = _postMotionRiggedPath;
             }
 
             // 绑定到Prefab：UniRig + 混元 Motion 后的 FBX 姿态/尺度已由管线决定，勿再套后处理里的 modelScale/rotation。
-            // 静态模型按包围盒自适应归一化到目标尺寸，避免模型过小（一个点）需要手动改 scale。
+            // 静态/绑骨模型按包围盒自适应归一化到目标尺寸；人形角色按身高归一化并脚底接地到局部 y=0。
             bool addMotion = generator.GetAddMotionEnabled();
             float bindScale = addMotion ? 1f : _pipelineSettings.GetModelScale();
             Vector3 bindRotation = addMotion
                 ? Vector3.zero
                 : _pipelineSettings.GetModelRotation();
-            BindModelToPrefab(modelPathForBind, bindScale, bindRotation, autoFitToTargetScale: !addMotion);
+            float targetSize = importOptions != null && importOptions.TargetModelSize > 0f
+                ? importOptions.TargetModelSize
+                : DefaultModelTargetSize;
+            bool groundToOriginY = importOptions?.GroundModelToOriginY == true;
+            BindModelToPrefab(
+                modelPathForBind,
+                bindScale,
+                bindRotation,
+                targetSize: targetSize,
+                autoFitToTargetScale: !addMotion,
+                groundToOriginY: groundToOriginY);
 
             CompleteGeneration(generator, modelPathForBind);
         }
@@ -1064,15 +1091,14 @@ namespace TJGenerators.Pipeline
         )
         {
             _postMotionRiggedPath = null;
+            _postMotionError = "动作后处理未完成";
             if (string.IsNullOrEmpty(extractedModelPath))
                 yield break;
 
             string absMesh = PathUtils.ToAbsoluteAssetPath(extractedModelPath);
             if (!File.Exists(absMesh))
             {
-                TJLog.LogWarning(
-                    $"[GenerationPipeline] 后处理动作：模型文件不存在: {extractedModelPath}"
-                );
+                _postMotionError = $"动作后处理：模型文件不存在: {extractedModelPath}";
                 yield break;
             }
 
@@ -1085,9 +1111,7 @@ namespace TJGenerators.Pipeline
             );
             if (unirigCfg == null || motionCfg == null)
             {
-                TJLog.LogWarning(
-                    "[GenerationPipeline] 后处理动作：未找到 unirig 或 hunyuan-motion 配置，跳过后处理"
-                );
+                _postMotionError = "动作后处理：未找到 unirig 或 hunyuan-motion 配置";
                 yield break;
             }
 
@@ -1097,7 +1121,7 @@ namespace TJGenerators.Pipeline
             string unirigEndpoint = unirigCfg.GetEndpoint("default");
             if (string.IsNullOrEmpty(unirigEndpoint))
             {
-                TJLog.LogWarning("[GenerationPipeline] 后处理动作：UniRig 端点未配置");
+                _postMotionError = "动作后处理：UniRig 端点未配置";
                 yield break;
             }
 
@@ -1127,9 +1151,7 @@ namespace TJGenerators.Pipeline
                 || string.IsNullOrEmpty(createResp.taskId)
             )
             {
-                TJLog.LogWarning(
-                    $"[GenerationPipeline] 后处理动作：UniRig 提交失败: {createErr ?? "无 taskId"}"
-                );
+                _postMotionError = $"动作后处理：UniRig 提交失败: {createErr ?? "无 taskId"}";
                 yield break;
             }
 
@@ -1142,16 +1164,14 @@ namespace TJGenerators.Pipeline
             );
             if (unirigOutcome.Completed == null)
             {
-                TJLog.LogWarning(
-                    $"[GenerationPipeline] 后处理动作：绑骨未完成: {unirigOutcome.Error ?? "未知错误"}"
-                );
+                _postMotionError = $"动作后处理：绑骨未完成 ({createResp.taskId}): {unirigOutcome.Error ?? "未知错误"}";
                 yield break;
             }
 
             string riggedUrl = GetMappedDownloadUrl(unirigOutcome.Completed, unirigCfg);
             if (string.IsNullOrEmpty(riggedUrl))
             {
-                TJLog.LogWarning("[GenerationPipeline] 后处理动作：绑骨响应中无模型 URL");
+                _postMotionError = $"动作后处理：绑骨响应中无模型 URL ({createResp.taskId})";
                 yield break;
             }
 
@@ -1160,11 +1180,12 @@ namespace TJGenerators.Pipeline
                 .Replace("\\", "/");
             generator.ButtonText = TJGeneratorsL10n.L("下载绑骨模型...");
             _host.Repaint();
-            yield return DownloadFile(riggedUrl, riggedSavePath);
+            string downloadError = null;
+            yield return DownloadFile(riggedUrl, riggedSavePath, err => downloadError = err);
 
-            if (!File.Exists(PathUtils.ToAbsoluteAssetPath(riggedSavePath)))
+            if (!string.IsNullOrEmpty(downloadError) || !File.Exists(PathUtils.ToAbsoluteAssetPath(riggedSavePath)))
             {
-                TJLog.LogWarning("[GenerationPipeline] 后处理动作：绑骨模型下载失败");
+                _postMotionError = $"动作后处理：绑骨模型下载失败 ({createResp.taskId}): {downloadError}";
                 yield break;
             }
 
@@ -1191,13 +1212,26 @@ namespace TJGenerators.Pipeline
             if (string.IsNullOrWhiteSpace(motionDescription))
             {
                 TJLog.Log("[GenerationPipeline] 后处理动作：无动作描述，仅完成绑骨");
+                _postMotionError = null;
+                yield break;
+            }
+
+            bool validAvatar = false;
+            foreach (var asset in AssetDatabase.LoadAllAssetsAtPath(riggedSavePath))
+            {
+                if (asset is Avatar avatar && avatar.isHuman && avatar.isValid)
+                    validAvatar = true;
+            }
+            if (!validAvatar)
+            {
+                _postMotionError = $"动作后处理：绑骨模型无有效 Humanoid Avatar ({createResp.taskId})";
                 yield break;
             }
 
             string motionEndpoint = motionCfg.GetEndpoint("default");
             if (string.IsNullOrEmpty(motionEndpoint))
             {
-                TJLog.LogWarning("[GenerationPipeline] 后处理动作：混元 Motion 端点未配置");
+                _postMotionError = "动作后处理：混元 Motion 端点未配置";
                 yield break;
             }
 
@@ -1229,9 +1263,7 @@ namespace TJGenerators.Pipeline
                 || string.IsNullOrEmpty(motionCreate.taskId)
             )
             {
-                TJLog.LogWarning(
-                    $"[GenerationPipeline] 后处理动作：混元 Motion 提交失败: {motionCreateErr ?? "无 taskId"}"
-                );
+                _postMotionError = $"动作后处理：混元 Motion 提交失败: {motionCreateErr ?? "无 taskId"}";
                 yield break;
             }
 
@@ -1244,16 +1276,14 @@ namespace TJGenerators.Pipeline
             );
             if (motionOutcome.Completed == null)
             {
-                TJLog.LogWarning(
-                    $"[GenerationPipeline] 后处理动作：动作任务未完成: {motionOutcome.Error ?? "未知"}"
-                );
+                _postMotionError = $"动作后处理：动作任务未完成 ({motionCreate.taskId}): {motionOutcome.Error ?? "未知"}";
                 yield break;
             }
 
             string motionFbxUrl = GetMappedDownloadUrl(motionOutcome.Completed, motionCfg);
             if (string.IsNullOrEmpty(motionFbxUrl))
             {
-                TJLog.LogWarning("[GenerationPipeline] 后处理动作：混元 Motion 响应中无下载 URL");
+                _postMotionError = $"动作后处理：混元 Motion 响应中无下载 URL ({motionCreate.taskId})";
                 yield break;
             }
 
@@ -1263,11 +1293,12 @@ namespace TJGenerators.Pipeline
                 .Replace("\\", "/");
             generator.ButtonText = TJGeneratorsL10n.L("下载动作模型...");
             _host.Repaint();
-            yield return DownloadFile(motionFbxUrl, motionSavePath);
+            downloadError = null;
+            yield return DownloadFile(motionFbxUrl, motionSavePath, err => downloadError = err);
 
-            if (!File.Exists(PathUtils.ToAbsoluteAssetPath(motionSavePath)))
+            if (!string.IsNullOrEmpty(downloadError) || !File.Exists(PathUtils.ToAbsoluteAssetPath(motionSavePath)))
             {
-                TJLog.LogWarning("[GenerationPipeline] 后处理动作：动作文件下载失败");
+                _postMotionError = $"动作后处理：动作文件下载失败 ({motionCreate.taskId}): {downloadError}";
                 yield break;
             }
 
@@ -1279,14 +1310,21 @@ namespace TJGenerators.Pipeline
             string riggedBaseName = Path.GetFileNameWithoutExtension(riggedSavePath);
             generator.ButtonText = TJGeneratorsL10n.L("创建动画控制器...");
             _host.Repaint();
-            RiggedModelPostProcess.CreateSingleClipLoopAnimatorControllerFromMotionClip(
+            string controllerPath = RiggedModelPostProcess.CreateSingleClipLoopAnimatorControllerFromMotionClip(
                 modelDir,
                 riggedBaseName,
                 motionSavePath
             );
+            if (string.IsNullOrEmpty(controllerPath)
+                || AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(controllerPath) == null)
+            {
+                _postMotionError = $"动作后处理：无有效 AnimationClip 或动画控制器 ({motionCreate.taskId})";
+                yield break;
+            }
+            _postMotionError = null;
         }
 
-        private IEnumerator DownloadFile(string url, string savePath)
+        private IEnumerator DownloadFile(string url, string savePath, Action<string> onError = null)
         {
             string directory = Path.GetDirectoryName(savePath)?.Replace('\\', '/');
             if (!string.IsNullOrEmpty(directory))
@@ -1307,6 +1345,7 @@ namespace TJGenerators.Pipeline
             }
             else
             {
+                onError?.Invoke(downloadError);
                 TJLog.LogWarning(
                     $"[GenerationPipeline] 文件下载失败: {url}, error: {downloadError}"
                 );
@@ -1418,7 +1457,8 @@ namespace TJGenerators.Pipeline
             float scale = 1f,
             Vector3 rotation = default,
             float targetSize = DefaultModelTargetSize,
-            bool autoFitToTargetScale = false
+            bool autoFitToTargetScale = false,
+            bool groundToOriginY = false
         )
         {
             var targetAsset = _host.GetTargetAsset();
@@ -1471,17 +1511,60 @@ namespace TJGenerators.Pipeline
                     modelInstance.transform.localRotation = Quaternion.Euler(rotation);
                     modelInstance.transform.localScale = new Vector3(scale, scale, scale);
 
+                    var modelAnimatorForBounds = modelInstance.GetComponent<Animator>();
+                    bool hasHumanoidAvatar =
+                        modelAnimatorForBounds != null
+                        && modelAnimatorForBounds.avatar != null
+                        && modelAnimatorForBounds.avatar.isValid
+                        && modelAnimatorForBounds.avatar.isHuman;
+
                     // 模型如果小到几乎看不见（一个点），按内容包围盒自适应放大到目标尺寸。
-                    // root-local 测量法（与 import-recipe 模板一致）：在实例根节点本地空间测内容最长边，
+                    // root-local 测量法（与 import-recipe 模板一致）：在实例根节点本地空间测内容包围盒，
                     // 剔除根节点自身缩放（含 cm 单位 FBX 的文件单位换算），不受换算传播时序影响——
                     // 旧版在原始 FBX 资产上量 bounds，会读到单位换算前的网格导致 ~100 倍缩小（表现为 ~1cm）。
-                    if (autoFitToTargetScale && targetSize > 0f)
+                    if ((autoFitToTargetScale && targetSize > 0f) || groundToOriginY)
                     {
-                        float contentLongest = ContentLongestEdgeInRootLocal(modelInstance);
-                        if (contentLongest > Mathf.Epsilon)
+                        if (TryGetContentBoundsInRootLocal(modelInstance, out Bounds localBounds))
                         {
-                            float normalized = targetSize / contentLongest;
-                            modelInstance.transform.localScale = new Vector3(normalized, normalized, normalized);
+                            float appliedScale = scale;
+                            if (autoFitToTargetScale && targetSize > 0f)
+                            {
+                                float referenceExtent = groundToOriginY && localBounds.size.y > Mathf.Epsilon
+                                    ? localBounds.size.y
+                                    : Mathf.Max(
+                                        Mathf.Max(localBounds.size.x, localBounds.size.y),
+                                        localBounds.size.z);
+                                if (referenceExtent > Mathf.Epsilon)
+                                {
+                                    appliedScale = targetSize / referenceExtent;
+                                    modelInstance.transform.localScale =
+                                        new Vector3(appliedScale, appliedScale, appliedScale);
+                                }
+                            }
+
+                            // 仅对非 Humanoid 模型用子物体 localPosition.y 做接地补偿：
+                            // Humanoid 动画由 Animator 以 GeneratedModel 原点为 y=0 驱动 Hips/脚底，
+                            // 若给 GeneratedModel 叠加正的 localPosition.y，播放动画时角色会整体浮空。
+                            if (groundToOriginY && !hasHumanoidAvatar)
+                            {
+                                Quaternion rot = Quaternion.Euler(rotation);
+                                Vector3 bMin = localBounds.min;
+                                Vector3 bMax = localBounds.max;
+                                float minRotatedY = float.PositiveInfinity;
+                                for (int ix = 0; ix < 2; ix++)
+                                for (int iy = 0; iy < 2; iy++)
+                                for (int iz = 0; iz < 2; iz++)
+                                {
+                                    Vector3 corner = new Vector3(
+                                        ix == 0 ? bMin.x : bMax.x,
+                                        iy == 0 ? bMin.y : bMax.y,
+                                        iz == 0 ? bMin.z : bMax.z);
+                                    float y = (rot * corner).y * appliedScale;
+                                    if (y < minRotatedY) minRotatedY = y;
+                                }
+                                if (!float.IsPositiveInfinity(minRotatedY))
+                                    modelInstance.transform.localPosition = new Vector3(0f, -minRotatedY, 0f);
+                            }
                         }
                     }
 
@@ -1539,11 +1622,12 @@ namespace TJGenerators.Pipeline
         /// 不受该换算传播时序影响——修复在原始资产上量 bounds 读到换算前网格导致的 ~1cm 缩小问题。
         /// 返回 0 表示无可渲染内容。
         /// </summary>
-        private static float ContentLongestEdgeInRootLocal(GameObject root)
+        private static bool TryGetContentBoundsInRootLocal(GameObject root, out Bounds localBounds)
         {
+            localBounds = default;
             var renderers = root.GetComponentsInChildren<Renderer>(true);
             if (renderers == null || renderers.Length == 0)
-                return 0f;
+                return false;
 
             bool has = false;
             Vector3 min = Vector3.zero, max = Vector3.zero;
@@ -1569,9 +1653,16 @@ namespace TJGenerators.Pipeline
                 Encap(rootT.InverseTransformPoint(new Vector3(b.max.x, b.max.y, b.min.z)));
             }
 
-            if (!has) return 0f;
-            Vector3 size = max - min;
-            float longest = Mathf.Max(Mathf.Max(size.x, size.y), size.z);
+            if (!has) return false;
+            localBounds = new Bounds((min + max) * 0.5f, max - min);
+            return true;
+        }
+
+        private static float ContentLongestEdgeInRootLocal(GameObject root)
+        {
+            if (!TryGetContentBoundsInRootLocal(root, out Bounds b))
+                return 0f;
+            float longest = Mathf.Max(Mathf.Max(b.size.x, b.size.y), b.size.z);
             return longest > Mathf.Epsilon ? longest : 0f;
         }
 
@@ -2295,6 +2386,7 @@ namespace TJGenerators.Pipeline
                 );
                 modelImporter.SaveAndReimport();
 
+                RiggedModelPostProcess.RepairMaterialsFromExtractedFbm(assetPath);
                 ApplyRenderedTextureToImportedModel(assetPath, renderedTexturePath);
             }
         }

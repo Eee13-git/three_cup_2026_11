@@ -1,86 +1,95 @@
 using System;
+using System.Reflection;
+using System.Collections;
+using System.Collections.Generic;
+using System.IO;
+using Codely.Newtonsoft.Json.Linq;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.TestTools;
 using NUnit.Framework;
 using UnityTcp.Editor.Tools;
 
 namespace TJGenerators.Editor.Tests
 {
-    /// <summary>
-    /// Offline unit tests for the game UI kit provider routing.
-    /// </summary>
     public class GameUiKitToolTests
     {
-        [Test]
-        public void ResolveStepGeneratorId_NullProvider_DefaultsToSeedream()
+        [TestCase(typeof(GenerateGameUiKitTool), "generate_game_ui_kit")]
+        [TestCase(typeof(GenerateSpriteTool), "generate_sprite")]
+        public void McpGenerationIsNotRegisteredInUnity(Type type, string toolName)
         {
-            Assert.AreEqual(
-                "huoshan_seedream_pro_image",
-                GenerateGameUiKitTool.ResolveStepGeneratorId(null, 1));
-            Assert.AreEqual(
-                GenerateImageLayersTool.SeedreamGeneratorId,
-                GenerateGameUiKitTool.ResolveStepGeneratorId(null, 2));
+            foreach (var method in type.GetMethods())
+                foreach (var attribute in CustomAttributeData.GetCustomAttributes(method))
+                    if (attribute.AttributeType.Name == "CustomToolAttribute")
+                        Assert.AreNotEqual(toolName, attribute.ConstructorArguments[0].Value);
         }
 
-        [Test]
-        public void ResolveStepGeneratorId_SeedreamPro_MapsByStep()
+        [TestCase("main/button,main_button")]
+        [TestCase("button,Button.png")]
+        public void SpriteLayersRejectInvalidNamesBeforeImport(string names)
         {
-            Assert.AreEqual(
-                "huoshan_seedream_pro_image",
-                GenerateGameUiKitTool.ResolveStepGeneratorId("seedream_pro", 1));
-            Assert.AreEqual(
-                GenerateImageLayersTool.SeedreamGeneratorId,
-                GenerateGameUiKitTool.ResolveStepGeneratorId("seedream_pro", 2));
+            var result = (Dictionary<string, object>)ImportImageFromUrlTool.ImportImageFromUrl(new JObject
+            {
+                ["image_urls"] = "https://example.com/base.png,https://example.com/button.png",
+                ["import_type"] = "sprite", ["names"] = names
+            });
+            Assert.AreEqual(false, result["success"]);
+            StringAssert.Contains("layer names", (string)result["message"]);
         }
 
-        [Test]
-        public void ResolveStepGeneratorId_Frontier_BothSteps()
+        [UnityTest]
+        public IEnumerator ImportStaticSpriteAndLayers()
         {
-            Assert.AreEqual(
-                "frontier-game-design",
-                GenerateGameUiKitTool.ResolveStepGeneratorId("frontier", 1));
-            Assert.AreEqual(
-                "frontier-game-design",
-                GenerateGameUiKitTool.ResolveStepGeneratorId("frontier", 2));
+            var name = "SpriteImportTest_" + Guid.NewGuid().ToString("N");
+            var source = Path.Combine(Path.GetTempPath(), name + ".png");
+            var outputFolder = "Assets/" + name;
+            var path = outputFolder + "/icon.png";
+            var url = new Uri(source).AbsoluteUri;
+            var texture = new Texture2D(32, 16, TextureFormat.RGBA32, false);
+            texture.SetPixel(16, 8, Color.white);
+            texture.Apply();
+            File.WriteAllBytes(source, texture.EncodeToPNG());
+            UnityEngine.Object.DestroyImmediate(texture);
+            try
+            {
+                var submit = (Dictionary<string, object>)ImportImageFromUrlTool.ImportImageFromUrl(new JObject
+                {
+                    ["image_url"] = url, ["import_type"] = "sprite", ["output_path"] = path
+                });
+                Assert.AreEqual(true, submit["success"], submit["message"] as string);
+                Assert.IsTrue(AssetDatabase.TryGetGUIDAndLocalFileIdentifier(
+                    AssetDatabase.LoadAssetAtPath<Sprite>(path), out string guid, out long localId));
+                yield return WaitForImport((string)submit["task_id"]);
+                var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(path);
+                Assert.IsTrue(AssetDatabase.TryGetGUIDAndLocalFileIdentifier(sprite, out string finalGuid, out long finalId));
+                Assert.AreEqual(guid, finalGuid);
+                Assert.AreEqual(localId, finalId);
+                Assert.AreEqual(32, sprite.texture.width);
+
+                var layers = (Dictionary<string, object>)ImportImageFromUrlTool.ImportImageFromUrl(new JObject
+                {
+                    ["image_urls"] = url + "," + url, ["names"] = "base,button",
+                    ["import_type"] = "sprite", ["output_path"] = outputFolder + "/layers"
+                });
+                Assert.AreEqual(true, layers["success"], layers["message"] as string);
+                yield return WaitForImport((string)layers["task_id"]);
+                foreach (var layer in new[] { "base", "button" })
+                    Assert.IsNotNull(AssetDatabase.LoadAssetAtPath<Sprite>(outputFolder + "/layers/" + layer + ".png"));
+            }
+            finally
+            {
+                File.Delete(source);
+                AssetDatabase.DeleteAsset(outputFolder);
+            }
         }
 
-        [Test]
-        public void ResolveStepGeneratorId_CaseInsensitive()
+        private static IEnumerator WaitForImport(string id)
         {
-            Assert.AreEqual(
-                "frontier-game-design",
-                GenerateGameUiKitTool.ResolveStepGeneratorId("FRONTIER", 1));
-            Assert.AreEqual(
-                "frontier-game-design",
-                GenerateGameUiKitTool.ResolveStepGeneratorId("Frontier", 2));
-        }
-
-        [Test]
-        public void ResolveStepGeneratorId_GarbageValue_FallsBackToSeedream()
-        {
-            Assert.AreEqual(
-                "huoshan_seedream_pro_image",
-                GenerateGameUiKitTool.ResolveStepGeneratorId("garbage", 1));
-            Assert.AreEqual(
-                GenerateImageLayersTool.SeedreamGeneratorId,
-                GenerateGameUiKitTool.ResolveStepGeneratorId("garbage", 2));
-        }
-
-        [Test]
-        public void SeedreamLayerHint_ContainsDetectionMarker_AndWithinPromptLimit()
-        {
-            // 与后端 mcp/game_ui_kit.go 的 gameUILayerPromptMarker 保持一致
-            StringAssert.Contains("game UI kit layer decomposition", GenerateGameUiKitTool.SeedreamLayerHint);
-            Assert.LessOrEqual(
-                GenerateGameUiKitTool.SeedreamLayerHint.Length, 1024,
-                "Seedream layer hint must fit the 1024-char prompt limit of seedream-image-layering");
-        }
-
-        [Test]
-        public void ScreenshotSuffix_PlusTypicalPrompt_WithinSeedreamProLimit()
-        {
-            // 后端共用同一后缀（frontier/seedream step 1），用户 prompt 300 字 + 后缀应仍在 1024 内
-            string userPrompt = new string('x', 300);
-            string effective = userPrompt + ", complete game UI screen design, full HUD layout";
-            Assert.LessOrEqual(effective.Length, 1024);
+            var task = ImportImageTaskTracker.GetTask(id);
+            var deadline = EditorApplication.timeSinceStartup + 30;
+            while (task.Status == "importing" && EditorApplication.timeSinceStartup < deadline)
+                yield return null;
+            Assert.AreEqual("completed", task.Status, task.ErrorMessage);
         }
     }
 }

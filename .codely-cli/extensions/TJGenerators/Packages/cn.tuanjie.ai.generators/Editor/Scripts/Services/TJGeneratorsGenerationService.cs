@@ -254,7 +254,7 @@ namespace TJGenerators
             if (string.IsNullOrEmpty(token))
                 return new TJGeneratorsSubmitResult {
                     Success = false, ErrorCode = "AUTH_REQUIRED",
-                    Message = TJGeneratorsL10n.L("未登录，请通过Unity编辑器左上角或Unity Hub登录后重试")
+                    Message = TJGeneratorsL10n.L("请先登录 Codely，或登录团结编辑器后重试")
                 };
 
             // 2. 构建 URL
@@ -320,10 +320,10 @@ namespace TJGenerators
                 {
                     case 403:
                         return new TJGeneratorsSubmitResult { Success = false, ErrorCode = "AUTH_REQUIRED",
-                            Message = TJGeneratorsL10n.L("登录权限检查失败，请确认编辑器左上角或者Hub内已登录") };
+                            Message = TJGeneratorsL10n.L("当前账号没有生成权限，请核对 Codely 或编辑器的登录账号") };
                     case 401:
                         return new TJGeneratorsSubmitResult { Success = false, ErrorCode = "AUTH_REQUIRED",
-                            Message = TJGeneratorsL10n.L("认证失败，请重新登录Unity账号") };
+                            Message = TJGeneratorsL10n.L("认证已失效，请重新登录 Codely 或团结编辑器") };
                     case 422:
                         return new TJGeneratorsSubmitResult { Success = false, ErrorCode = "INVALID_PARAMS",
                             Message = string.Format(TJGeneratorsL10n.L("请求参数错误: {0}"), body) };

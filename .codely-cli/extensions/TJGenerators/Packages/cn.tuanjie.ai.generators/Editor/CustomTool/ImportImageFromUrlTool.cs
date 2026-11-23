@@ -154,7 +154,7 @@ namespace UnityTcp.Editor.Tools
             "then layers), output_path (optional: file path for single image mode / folder path for multi-image mode; " +
             "default Assets/TJGenerators/History/<ImportImage/<url-hash>.png | ImportLayers_<timestamp>>), " +
             "names (optional comma-separated file names for multi-image mode, e.g. layer_0,layer_1), " +
-            "prompt (optional display text for History), session_id. import_type defaults to 'image'; use 'skybox' for one color panorama " +
+            "prompt (optional display text for History), session_id. use import_type='sprite' for a Sprite or UI layer (single or multiple PNGs). Default 'image' imports a texture; use 'skybox' for one color panorama " +
             "from MCP generate_skybox: imports as Cubemap and creates/reuses a Skybox/Cubemap material, returning material_path. " +
             "Skybox mode does not change the scene; apply the material after completion if requested. Do not import depth maps as skyboxes. " +
             "Supported extensions: .png / .jpg / .jpeg (Unity cannot import .webp — regenerate with output_format png|jpeg). " +
@@ -189,14 +189,27 @@ namespace UnityTcp.Editor.Tools
 
                 bool isMulti = imageUrls.Count > 1;
                 string importType = parameters["import_type"]?.ToString() ?? "image";
-                if (importType != "image" && importType != "skybox")
-                    return Fail("import_type must be 'image' or 'skybox'.");
+                if (importType != "image" && importType != "sprite" && importType != "skybox")
+                    return Fail("import_type must be 'image', 'sprite' or 'skybox'.");
                 bool isSkybox = importType == "skybox";
                 if (isSkybox && isMulti) return Fail("Skybox import requires one color panorama URL.");
                 string outputPath = parameters["output_path"]?.ToString();
                 string prompt     = parameters["prompt"]?.ToString();
                 string sessionId  = parameters["session_id"]?.ToString() ?? "";
                 List<string> names = ParseNameList(parameters["names"]?.ToString(), imageUrls, isMulti);
+                if (importType == "sprite")
+                {
+                    if (!string.IsNullOrEmpty(outputPath) &&
+                        !PathUtils.TryNormalizeOutputAssetPath(outputPath, out outputPath, out string pathError))
+                        return Fail(pathError);
+                    if (!isMulti && !string.IsNullOrEmpty(outputPath) &&
+                        !string.Equals(Path.GetExtension(outputPath), Path.GetExtension(new Uri(imageUrls[0]).AbsolutePath),
+                            StringComparison.OrdinalIgnoreCase))
+                        return Fail("Sprite output_path must use the source image extension.");
+                    if (isMulti && names.Take(imageUrls.Count).Select(Path.GetFileNameWithoutExtension)
+                            .Distinct(StringComparer.OrdinalIgnoreCase).Count() != imageUrls.Count)
+                        return Fail("Sprite layer names must be distinct after file name normalization.");
+                }
 
                 string placeholderPath = "";
                 string historyTaskId = "";
@@ -206,7 +219,7 @@ namespace UnityTcp.Editor.Tools
                 {
                     // 单图：文件级占位（GUID 稳定，下载完成后原地覆盖文件内容）
                     placeholderPath = string.IsNullOrEmpty(outputPath)
-                        ? (isSkybox ? "Assets/TJGenerators/History/ImportSkybox/" : "Assets/TJGenerators/History/ImportImage/") +
+                        ? (isSkybox ? "Assets/TJGenerators/History/ImportSkybox/" : importType == "sprite" ? "Assets/TJGenerators/History/ImportSprite/" : "Assets/TJGenerators/History/ImportImage/") +
                           Import3DModelFromUrlTool.BuildUrlHashFileName(imageUrls[0], Path.GetExtension(new Uri(imageUrls[0]).AbsolutePath))
                         : NormalizeAssetFilePath(outputPath);
                     if (isSkybox)
@@ -230,6 +243,8 @@ namespace UnityTcp.Editor.Tools
                     // Existing skyboxes remain untouched until a valid replacement has downloaded.
                     if (isSkybox && AssetDatabase.LoadAssetAtPath<Cubemap>(placeholderPath) == null)
                         ConfigureSkybox(placeholderPath, materialPath, sessionId);
+                    if (importType == "sprite" && AssetDatabase.LoadAssetAtPath<Sprite>(placeholderPath) == null)
+                        GeneratedTextureImportUtils.ConfigureImportedTexture(placeholderPath, TextureImporterType.Sprite);
                     TJGeneratorsGenerationLabel.EnableLabel(TJGeneratorsAssetReference.FromPath(placeholderPath));
                     TJGeneratorsGenerationLabel.EnableSessionLabel(TJGeneratorsAssetReference.FromPath(placeholderPath), sessionId);
                     historyTaskId = TJGeneratorsHistoryManager.AddGeneratingPlaceholder(
@@ -353,6 +368,7 @@ namespace UnityTcp.Editor.Tools
                 }
 
                 if (!string.IsNullOrEmpty(task.PlaceholderPath)) result["placeholder_path"] = task.PlaceholderPath;
+                if (task.ImportType == "sprite") result["import_type"] = "sprite";
                 if (task.ImportType == "skybox")
                 {
                     result["import_type"] = "skybox";
@@ -457,7 +473,8 @@ namespace UnityTcp.Editor.Tools
                     if (task.ImportType == "skybox")
                         ConfigureSkybox(targetPath, task.MaterialPath, task.SessionId);
                     else
-                        GeneratedTextureImportUtils.ConfigureImportedTexture(targetPath, TextureImporterType.Default, alphaIsTransparency: true);
+                        GeneratedTextureImportUtils.ConfigureImportedTexture(targetPath,
+                            task.ImportType == "sprite" ? TextureImporterType.Sprite : TextureImporterType.Default);
                 }
                 catch (Exception e) { importError = e; }
                 if (importError != null)

@@ -62,10 +62,27 @@ namespace TJGenerators
         }
 
         [SerializeField]
+        private bool terrainHeightmapSketchReconstruction = true;
+
+        [SerializeField]
+        [Range(0f, 0.25f)]
+        private float terrainHeightmapSketchDetailBlend = 0.25f;
+
+        [SerializeField]
+        private bool terrainHeightmapThermalErosion = true;
+
+        [SerializeField]
         private bool terrainHeightmapGaussianBlur = true;
 
         [SerializeField]
         private bool terrainHeightmapMedian3x3 = true;
+
+        [SerializeField]
+        private bool terrainCustomWorldSize = false;
+
+        [SerializeField]
+        [Range(32f, 2048f)]
+        private float terrainWorldSizeMeters = 256f;
 
         [SerializeField]
         [Range(0.5f, 3f)]
@@ -252,7 +269,12 @@ namespace TJGenerators
             selectedPromptTemplate = template;
 
             if (_currentGenerator is DynamicGenerator dg)
+            {
                 dg.SetPromptTemplateSelection(selectedPromptTemplate);
+                // 与 CustomTool generate_terrain 一致：高度图固定 PNG，避免默认 jpeg 导致「一键生成地形」长期灰色
+                if (IsUnityTerrainHeightmapTemplateSelected())
+                    dg.SetParameter("outputFormat", "png");
+            }
 
             Repaint();
         }
@@ -351,21 +373,84 @@ namespace TJGenerators
             GUILayout.Label(TJGeneratorsL10n.L("地形高度图（生成后）"), CommonStyles.HeaderStyle);
             GUILayout.Space(6);
 
+            GUILayout.BeginVertical(GUILayout.MaxWidth(CommonStyles.LeftComponentWidth));
             GUILayout.Label(
                 TJGeneratorsL10n.L("在右侧历史记录中选中对应 PNG 后，应用后处理并创建场景地形。"),
-                CommonStyles.SmallGreyLabelStyle
+                CommonStyles.SmallGreyLeftLabelStyle,
+                GUILayout.MaxWidth(CommonStyles.LeftComponentWidth)
             );
             GUILayout.Space(8);
 
+            float rowW = CommonStyles.LeftComponentWidth;
+            terrainCustomWorldSize = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    TJGeneratorsL10n.L("自定义地形尺寸"),
+                    TJGeneratorsL10n.L("默认不勾选：1 像素 = 1 米。勾选后按下方场景边长换算像素比例，高度图分辨率不变。")
+                ),
+                terrainCustomWorldSize,
+                GUILayout.MaxWidth(rowW)
+            );
+            if (terrainCustomWorldSize)
+            {
+                EditorGUI.indentLevel++;
+                terrainWorldSizeMeters = EditorGUILayout.Slider(
+                    new GUIContent(
+                        TJGeneratorsL10n.L("场景边长（米）"),
+                        TJGeneratorsL10n.L("较长边的世界长度。小公园/农场约 64～256；大山脉可到 1000 以上。高度约为边长的 14%。")
+                    ),
+                    terrainWorldSizeMeters,
+                    32f,
+                    2048f
+                );
+                EditorGUI.indentLevel--;
+            }
+
+            GUILayout.Space(4);
+            terrainHeightmapSketchReconstruction = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    TJGeneratorsL10n.L("后处理：压高频尖刺（保留原版高度）"),
+                    TJGeneratorsL10n.L("仍以亮度当高度（俯视河网与原版一致）；压山体亮刺并填平山体暗坑，河谷走廊保留深度。关闭则完全不压制。")
+                ),
+                terrainHeightmapSketchReconstruction,
+                GUILayout.MaxWidth(rowW)
+            );
+            if (terrainHeightmapSketchReconstruction)
+            {
+                EditorGUI.indentLevel++;
+                terrainHeightmapSketchDetailBlend = EditorGUILayout.Slider(
+                    new GUIContent(
+                        TJGeneratorsL10n.L("亮刺保留幅度"),
+                        TJGeneratorsL10n.L("越高侧视越接近原版细纹（也更易尖）；越低山体更圆润。河道不受此项影响。默认拉满 0.25。")
+                    ),
+                    terrainHeightmapSketchDetailBlend,
+                    0f,
+                    0.25f
+                );
+                EditorGUI.indentLevel--;
+            }
+
+            GUILayout.Space(4);
             terrainHeightmapMedian3x3 = EditorGUILayout.ToggleLeft(
                 TJGeneratorsL10n.L("后处理：Median 3x3 去尖刺（散点离群点）"),
-                terrainHeightmapMedian3x3
+                terrainHeightmapMedian3x3,
+                GUILayout.MaxWidth(rowW)
+            );
+
+            GUILayout.Space(4);
+            terrainHeightmapThermalErosion = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    TJGeneratorsL10n.L("后处理：热力侵蚀（削过陡坡）"),
+                    TJGeneratorsL10n.L("按休止角搬移物质，让重建后的坡度更接近自然山体。")
+                ),
+                terrainHeightmapThermalErosion,
+                GUILayout.MaxWidth(rowW)
             );
 
             GUILayout.Space(4);
             terrainHeightmapGaussianBlur = EditorGUILayout.ToggleLeft(
                 TJGeneratorsL10n.L("后处理：高斯模糊平滑"),
-                terrainHeightmapGaussianBlur
+                terrainHeightmapGaussianBlur,
+                GUILayout.MaxWidth(rowW)
             );
             if (terrainHeightmapGaussianBlur)
             {
@@ -389,8 +474,12 @@ namespace TJGenerators
             {
                 EditorGUI.indentLevel++;
                 terrainHeightmapPercentileNormalize = EditorGUILayout.ToggleLeft(
-                    TJGeneratorsL10n.L("百分位拉伸（去掉极暗/极亮离群点再起有效对比）"),
-                    terrainHeightmapPercentileNormalize
+                    new GUIContent(
+                        TJGeneratorsL10n.L("百分位拉伸（去掉极暗/极亮离群点再起有效对比）"),
+                        TJGeneratorsL10n.L("忽略顶/底百分位极值后再拉对比度；尖刺压制在拉伸之后执行，不会被再次放大。")
+                    ),
+                    terrainHeightmapPercentileNormalize,
+                    GUILayout.MaxWidth(rowW)
                 );
                 EditorGUI.BeginDisabledGroup(!terrainHeightmapPercentileNormalize);
                 terrainHeightmapPercentileLow = EditorGUILayout.Slider(
@@ -466,10 +555,12 @@ namespace TJGenerators
             {
                 GUILayout.Space(4);
                 GUILayout.Label(
-                    TJGeneratorsL10n.L("请先在历史中选中由本模板生成的已完成 PNG。"),
-                    CommonStyles.SmallGreyLabelStyle
+                    GetTerrainButtonDisabledReason(selectedHistoryItem),
+                    CommonStyles.SmallGreyLeftLabelStyle,
+                    GUILayout.MaxWidth(CommonStyles.LeftComponentWidth)
                 );
             }
+            GUILayout.EndVertical();
         }
 
         protected override void DrawHistoryPanel(float panelWidth)
@@ -778,12 +869,20 @@ namespace TJGenerators
 
             if (_currentGenerator is DynamicGenerator dynamicGen)
             {
-                string fmt = dynamicGen.GetParameter("outputFormat")?.ToString() ?? "";
-                if (string.Equals(fmt, "jpeg", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(fmt, "jpg", StringComparison.OrdinalIgnoreCase))
+                if (IsUnityTerrainHeightmapTemplateSelected())
+                {
+                    dynamicGen.SetParameter("outputFormat", "png");
                     dynamicGen.SetParameter("isSegmentation", false);
-                else if (string.Equals(fmt, "png", StringComparison.OrdinalIgnoreCase))
-                    dynamicGen.SetParameter("isSegmentation", true);
+                }
+                else
+                {
+                    string fmt = dynamicGen.GetParameter("outputFormat")?.ToString() ?? "";
+                    if (string.Equals(fmt, "jpeg", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(fmt, "jpg", StringComparison.OrdinalIgnoreCase))
+                        dynamicGen.SetParameter("isSegmentation", false);
+                    else if (string.Equals(fmt, "png", StringComparison.OrdinalIgnoreCase))
+                        dynamicGen.SetParameter("isSegmentation", true);
+                }
 
                 dynamicGen.ClearExtraRawJsonFields();
 
@@ -800,9 +899,19 @@ namespace TJGenerators
         public override string GetAssetSavePath(PipelineMediaType type, ModelGeneratorBase generator)
         {
             if (type != PipelineMediaType.Texture) return null;
-            // 图片分层类 generator 输出多张 RGBA PNG；其余模型仍按 jpeg 占位，pipeline 会按实际格式迁移扩展名
+            // 图片分层 / 地形高度图 / 用户显式选 PNG：占位用 .png；其余默认 .jpg（落盘时按实际字节迁移）
             bool isLayering = generator != null && IsLayeringGenerator(generator.GeneratorId);
-            return BuildHistoryTexturePath(isLayering ? "ImageLayers_" : "Image_", isLayering ? ".png" : ".jpg");
+            bool isTerrainHeightmap = IsUnityTerrainHeightmapTemplateSelected();
+            bool requestsPng = false;
+            if (generator is DynamicGenerator dgFmt)
+            {
+                string fmt = dgFmt.GetParameter("outputFormat")?.ToString();
+                requestsPng = string.Equals(fmt, "png", StringComparison.OrdinalIgnoreCase);
+            }
+            bool usePng = isLayering || isTerrainHeightmap || requestsPng;
+            return BuildHistoryTexturePath(
+                isLayering ? "ImageLayers_" : "Image_",
+                usePng ? ".png" : ".jpg");
         }
 
         public override void OnAssetSaved(PipelineMediaType type, string savePath, ModelGeneratorBase generator)
@@ -862,7 +971,7 @@ namespace TJGenerators
 
         /// <summary>
         /// 允许一键生成：已完成、本地 PNG 存在；且（历史里保存了地形模板 id，或当前窗口正选中地形高度图模板）。
-        /// 避免仅依赖 <see cref="TJGeneratorsGenerationHistoryItem.promptTemplateId"/>（旧历史或序列化前记录为空时按钮长期灰色）。
+        /// JPEG 不能建地形；选中地形模板时会强制 outputFormat=png。
         /// </summary>
         private bool CanGenerateTerrainFromHistoryItem(TJGeneratorsGenerationHistoryItem item)
         {
@@ -883,6 +992,25 @@ namespace TJGenerators
                 return true;
 
             return IsUnityTerrainHeightmapTemplateSelected();
+        }
+
+        private static bool IsJpegPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return false;
+            return path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+                || path.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private string GetTerrainButtonDisabledReason(TJGeneratorsGenerationHistoryItem item)
+        {
+            if (item == null)
+                return TJGeneratorsL10n.L("请先在历史中选中由本模板生成的已完成 PNG。");
+            if (item.isGenerating)
+                return TJGeneratorsL10n.L("请等待该条生成完成后再创建地形。");
+            if (IsJpegPath(item.modelPath))
+                return TJGeneratorsL10n.L("JPEG 无法生成地形，请用 PNG 重新生成。");
+            return TJGeneratorsL10n.L("请先在历史中选中由本模板生成的已完成 PNG。");
         }
 
         /// <summary>
@@ -906,9 +1034,14 @@ namespace TJGenerators
 
             var hmOpts = new TerrainHeightmapPostProcessOptions
             {
+                sketchReconstruction = terrainHeightmapSketchReconstruction,
+                sketchDetailBlend = terrainHeightmapSketchDetailBlend,
                 median3x3 = terrainHeightmapMedian3x3,
                 gaussianBlur = terrainHeightmapGaussianBlur,
                 gaussianSigma = terrainHeightmapBlurSigma,
+                thermalErosion = terrainHeightmapThermalErosion,
+                thermalErosionIterations = 8,
+                thermalErosionTalus = 0.022f,
                 percentileNormalization = terrainHeightmapPercentileNormalize,
                 percentileLow = terrainHeightmapPercentileLow,
                 percentileHigh = terrainHeightmapPercentileHigh,
@@ -920,8 +1053,9 @@ namespace TJGenerators
                 ),
             };
 
+            float worldSize = terrainCustomWorldSize ? terrainWorldSizeMeters : 0f;
             var (_, _, _, error) = TerrainCreationUtils.PostProcessAndCreateTerrain(
-                item.modelPath, hmOpts);
+                item.modelPath, hmOpts, "TJGenerators Terrain", worldSize);
 
             if (!string.IsNullOrEmpty(error))
                 ErrorDialogUtils.ShowErrorDialog(TJGeneratorsL10n.L("地形生成失败"), error, LogTag);

@@ -1599,6 +1599,324 @@
       }
     },
     {
+      "id": "frontier_flare",
+      "displayName": "全能耀斑",
+      "enabled": true,
+      "outputType": "image",
+      "imageBase64FieldName": "images",
+      "imageBase64AsArray": true,
+      "imageUrlsFieldName": "imageUrls",
+      "modelSelector": {
+        "name": "全能耀斑",
+        "description": "快速高质量生图与参考图编辑",
+        "functionTags": [
+          "文生图",
+          "图生图"
+        ],
+        "vendorTags": [
+          "全能"
+        ],
+        "iconPath": "",
+        "pinned": true
+      },
+      "promptTemplateSelector": {
+        "enabled": true,
+        "title": "提示词模板",
+        "description": "可选前缀，会与下方文本提示词合并后发送",
+        "options": [
+          {
+            "id": "unity_terrain_heightmap",
+            "name": "Unity 地形高度图",
+            "description": "高度图，顶视图",
+            "category": "地形",
+            "prompt": "strict top-down orthographic view, grayscale heightmap for Unity Terrain, follow reference image layout and elevation, high precision, seamless terrain coverage, no perspective, no horizon, suitable as RAW height texture import"
+          }
+        ]
+      },
+      "endpoints": [
+        {
+          "key": "default",
+          "value": "task/frontier_flare"
+        }
+      ],
+      "uiLayout": {
+        "showTextInput": true,
+        "showImageUpload": true,
+        "showMultiView": false,
+        "advancedFoldout": true,
+        "textInputLabel": "提示词",
+        "textInputPlaceholder": "描述你想要生成的图片...",
+        "imageUploadLabel": "参考图片（可选）",
+        "maxReferenceImages": 16,
+        "advancedLabel": "高级设置",
+        "primaryParameterIds": [
+          "animation"
+        ]
+      },
+      "parameters": [
+        {
+          "id": "imageSize",
+          "type": "dropdown",
+          "label": "图片尺寸",
+          "apiFieldName": "imageSize",
+          "options": [
+            {
+              "value": "square_hd",
+              "label": "1:1 HD"
+            },
+            {
+              "value": "square",
+              "label": "1:1"
+            },
+            {
+              "value": "portrait_4_3",
+              "label": "3:4"
+            },
+            {
+              "value": "portrait_16_9",
+              "label": "9:16"
+            },
+            {
+              "value": "landscape_4_3",
+              "label": "4:3"
+            },
+            {
+              "value": "landscape_16_9",
+              "label": "16:9"
+            }
+          ],
+          "defaultValue": "square_hd",
+          "tooltip": "生成图片尺寸"
+        },
+        {
+          "id": "quality",
+          "type": "dropdown",
+          "label": "质量",
+          "apiFieldName": "quality",
+          "options": [
+            {
+              "value": "auto",
+              "label": "auto"
+            },
+            {
+              "value": "low",
+              "label": "low"
+            },
+            {
+              "value": "medium",
+              "label": "medium"
+            },
+            {
+              "value": "high",
+              "label": "high"
+            },
+            {
+              "value": "xhigh",
+              "label": "xhigh"
+            },
+            {
+              "value": "max",
+              "label": "max"
+            }
+          ],
+          "defaultValue": "medium",
+          "tooltip": "生成质量（默认 medium）"
+        },
+        {
+          "id": "outputFormat",
+          "type": "dropdown",
+          "label": "输出格式",
+          "apiFieldName": "outputFormat",
+          "options": [
+            {
+              "value": "png",
+              "label": "png"
+            },
+            {
+              "value": "jpeg",
+              "label": "jpeg"
+            },
+            {
+              "value": "webp",
+              "label": "webp"
+            }
+          ],
+          "defaultValue": "png",
+          "tooltip": "生成图片格式"
+        },
+        {
+          "id": "isSegmentation",
+          "type": "bool",
+          "label": "自动抠图（去除背景）",
+          "apiFieldName": "isSegmentation",
+          "tooltip": "是否自动抠图去除背景。高度图请保持关闭",
+          "defaultValue": "false"
+        }
+      ],
+      "responseMapping": {
+        "downloadUrlPath": "imageUrls"
+      }
+    },
+    {
+      "id": "frontier_sunburst",
+      "displayName": "全能日辉",
+      "enabled": true,
+      "outputType": "image",
+      "imageBase64FieldName": "images",
+      "imageBase64AsArray": true,
+      "imageUrlsFieldName": "imageUrls",
+      "modelSelector": {
+        "name": "全能日辉",
+        "description": "精细视觉创作与多轮一致性编辑",
+        "functionTags": [
+          "文生图",
+          "图生图"
+        ],
+        "vendorTags": [
+          "全能"
+        ],
+        "iconPath": "",
+        "pinned": true
+      },
+      "promptTemplateSelector": {
+        "enabled": true,
+        "title": "提示词模板",
+        "description": "可选前缀，会与下方文本提示词合并后发送",
+        "options": [
+          {
+            "id": "unity_terrain_heightmap",
+            "name": "Unity 地形高度图",
+            "description": "高度图，顶视图",
+            "category": "地形",
+            "prompt": "strict top-down orthographic view, grayscale heightmap for Unity Terrain, follow reference image layout and elevation, high precision, seamless terrain coverage, no perspective, no horizon, suitable as RAW height texture import"
+          }
+        ]
+      },
+      "endpoints": [
+        {
+          "key": "default",
+          "value": "task/frontier_sunburst"
+        }
+      ],
+      "uiLayout": {
+        "showTextInput": true,
+        "showImageUpload": true,
+        "showMultiView": false,
+        "advancedFoldout": true,
+        "textInputLabel": "提示词",
+        "textInputPlaceholder": "描述你想要生成的图片...",
+        "imageUploadLabel": "参考图片（可选）",
+        "maxReferenceImages": 16,
+        "advancedLabel": "高级设置",
+        "primaryParameterIds": [
+          "animation"
+        ]
+      },
+      "parameters": [
+        {
+          "id": "imageSize",
+          "type": "dropdown",
+          "label": "图片尺寸",
+          "apiFieldName": "imageSize",
+          "options": [
+            {
+              "value": "square_hd",
+              "label": "1:1 HD"
+            },
+            {
+              "value": "square",
+              "label": "1:1"
+            },
+            {
+              "value": "portrait_4_3",
+              "label": "3:4"
+            },
+            {
+              "value": "portrait_16_9",
+              "label": "9:16"
+            },
+            {
+              "value": "landscape_4_3",
+              "label": "4:3"
+            },
+            {
+              "value": "landscape_16_9",
+              "label": "16:9"
+            }
+          ],
+          "defaultValue": "square_hd",
+          "tooltip": "生成图片尺寸"
+        },
+        {
+          "id": "quality",
+          "type": "dropdown",
+          "label": "质量",
+          "apiFieldName": "quality",
+          "options": [
+            {
+              "value": "auto",
+              "label": "auto"
+            },
+            {
+              "value": "low",
+              "label": "low"
+            },
+            {
+              "value": "medium",
+              "label": "medium"
+            },
+            {
+              "value": "high",
+              "label": "high"
+            },
+            {
+              "value": "xhigh",
+              "label": "xhigh"
+            },
+            {
+              "value": "max",
+              "label": "max"
+            }
+          ],
+          "defaultValue": "medium",
+          "tooltip": "生成质量（默认 medium）"
+        },
+        {
+          "id": "outputFormat",
+          "type": "dropdown",
+          "label": "输出格式",
+          "apiFieldName": "outputFormat",
+          "options": [
+            {
+              "value": "png",
+              "label": "png"
+            },
+            {
+              "value": "jpeg",
+              "label": "jpeg"
+            },
+            {
+              "value": "webp",
+              "label": "webp"
+            }
+          ],
+          "defaultValue": "png",
+          "tooltip": "生成图片格式"
+        },
+        {
+          "id": "isSegmentation",
+          "type": "bool",
+          "label": "自动抠图（去除背景）",
+          "apiFieldName": "isSegmentation",
+          "tooltip": "是否自动抠图去除背景。高度图请保持关闭",
+          "defaultValue": "false"
+        }
+      ],
+      "responseMapping": {
+        "downloadUrlPath": "imageUrls"
+      }
+    },
+    {
       "id": "huoshan_seedream_pro_image",
       "displayName": "火山 SeeDream Pro",
       "enabled": true,

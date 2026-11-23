@@ -59,43 +59,23 @@ namespace TJGenerators.Editor.Tests
         }
 
         [Test]
-        public void Import_AddMotionRequiresDescription()
+        public void Import_RejectsDeprecatedAddMotion()
         {
             AssertFailed(
                 Import3DModelFromUrlTool.ImportModelFromUrl(new JObject
                 {
                     ["model_url"] = "https://cdn.example.com/model.fbx",
-                    ["add_motion"] = true
-                }),
-                messageContains: "'motion_description' is required");
-        }
-
-        [Test]
-        public void Import_AddMotionOnlyAllowedForStatic()
-        {
-            AssertFailed(
-                Import3DModelFromUrlTool.ImportModelFromUrl(new JObject
-                {
-                    ["model_url"] = "https://cdn.example.com/model.fbx",
-                    ["output_type"] = "rigged",
-                    ["source_model_path"] = "Assets/Missing.fbx",
                     ["add_motion"] = true,
                     ["motion_description"] = "a walking cycle"
                 }),
-                messageContains: "add_motion is only supported with output_type=static");
+                messageContains: "deprecated");
         }
 
         [Test]
-        public void Import_RiggedRequiresSourceModelPath()
+        public void Import_RiggedValidatesOptionalSourceModelPath()
         {
-            AssertFailed(
-                Import3DModelFromUrlTool.ImportModelFromUrl(new JObject
-                {
-                    ["model_url"] = "https://cdn.example.com/model.fbx",
-                    ["output_type"] = "rigged"
-                }),
-                messageContains: "'source_model_path' is required");
-
+            // source_model_path is optional for output_type=rigged (Rodin rigging embeds textures),
+            // but if provided it must point to an existing asset.
             AssertFailed(
                 Import3DModelFromUrlTool.ImportModelFromUrl(new JObject
                 {
@@ -167,14 +147,6 @@ namespace TJGenerators.Editor.Tests
         }
 
         [Test]
-        public void Sprite_RejectsEmptyPromptAndImage()
-        {
-            AssertFailed(
-                GenerateSpriteTool.GenerateSprite(new JObject()),
-                messageContains: "Either 'prompt' or 'image_path' must be provided");
-        }
-
-        [Test]
         public void Terrain_RejectsEmptyPromptAndImage()
         {
             AssertFailed(
@@ -199,6 +171,22 @@ namespace TJGenerators.Editor.Tests
         }
 
         #endregion
+
+        [Test]
+        public void SliceUiSprites_RejectsMissingCommand()
+        {
+            AssertFailed(
+                SliceUiSpritesTool.SliceUiSprites(new JObject()),
+                messageContains: "'command' is required");
+        }
+
+        [Test]
+        public void SliceUiSprites_RejectsUnknownCommand()
+        {
+            AssertFailed(
+                SliceUiSpritesTool.SliceUiSprites(new JObject { ["command"] = "nope" }),
+                messageContains: "Unknown command");
+        }
 
         #region Media import (import_video_from_url / import_audio_from_url)
 
@@ -272,21 +260,6 @@ namespace TJGenerators.Editor.Tests
         // Unity-side import tools take no prompt limits or generator ids.
 
         [Test]
-        public void Sprite_RejectsOverlongPrompt_ForFrontierEffect()
-        {
-            int maxLen = TJGeneratorsPromptLimits.GetMaxLength("frontier-effect");
-            Assert.Greater(maxLen, 0);
-            AssertFailed(
-                GenerateSpriteTool.GenerateSprite(new JObject
-                {
-                    ["generator_id"] = "frontier-effect",
-                    ["prompt"] = new string('a', maxLen + 1)
-                }),
-                errorCode: "INVALID_PARAMS",
-                messageContains: "exceeds the");
-        }
-
-        [Test]
         public void Terrain_RejectsOverlongPrompt()
         {
             int maxLen = TJGeneratorsPromptLimits.GetMaxLength("frontier-effect");
@@ -294,20 +267,6 @@ namespace TJGenerators.Editor.Tests
             AssertFailed(
                 GenerateTerrainTool.GenerateTerrain(
                     new JObject { ["prompt"] = new string('a', maxLen + 1) }),
-                errorCode: "INVALID_PARAMS",
-                messageContains: "exceeds the");
-        }
-
-        [Test]
-        public void Sprite_RejectsOverlongPrompt_ForHuoshanSeedream()
-        {
-            int maxLen = TJGeneratorsPromptLimits.GetMaxLength("huoshan_seedream");
-            Assert.AreEqual(1024, maxLen);
-            AssertFailed(
-                GenerateSpriteTool.GenerateSprite(new JObject
-                {
-                    ["prompt"] = new string('a', maxLen + 1)
-                }),
                 errorCode: "INVALID_PARAMS",
                 messageContains: "exceeds the");
         }
@@ -447,6 +406,33 @@ namespace TJGenerators.Editor.Tests
                 Assert.IsTrue(dict.ContainsKey("error_code"), "result missing error_code");
                 Assert.AreEqual(errorCode, dict["error_code"]?.ToString());
             }
+        }
+
+        [Test]
+        public void ImportSpriteSequence_RejectsMissingUrl()
+        {
+            AssertFailed(
+                ImportSpriteSequenceFromUrlTool.ImportSpriteSequenceFromUrl(new JObject()),
+                messageContains: "'sheet_url' or 'image_url' is required");
+        }
+
+        [Test]
+        public void ImportSpriteSequence_RejectsUnsupportedExtension()
+        {
+            AssertFailed(
+                ImportSpriteSequenceFromUrlTool.ImportSpriteSequenceFromUrl(new JObject
+                {
+                    ["sheet_url"] = "https://cdn.example.com/sheet.webp"
+                }),
+                messageContains: "Unsupported sheet URL extension");
+        }
+
+        [Test]
+        public void ImportSpriteSequenceQuery_RejectsMissingTaskId()
+        {
+            AssertFailed(
+                ImportSpriteSequenceFromUrlTool.QueryImportStatus(new JObject()),
+                messageContains: "'task_id' parameter is required");
         }
     }
 }

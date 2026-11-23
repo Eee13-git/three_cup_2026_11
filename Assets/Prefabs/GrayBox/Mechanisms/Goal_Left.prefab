@@ -10,6 +10,7 @@ GameObject:
   m_Component:
   - component: {fileID: 827406003888088054}
   - component: {fileID: 8574263767824785083}
+  - component: {fileID: 3888259942721478755}
   m_Layer: 0
   m_Name: Visual
   m_TagString: Untagged
@@ -26,7 +27,7 @@ Transform:
   m_GameObject: {fileID: 436943639570629990}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: -0.39333332, z: 0}
+  m_LocalPosition: {x: 0, y: -0.43166664, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -52,7 +53,7 @@ SpriteRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
+  - {fileID: 2100000, guid: 4b43d52bcd17faa4ea80a9320ccf38b3, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -72,18 +73,38 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 5
+  m_SortingOrder: 25
   m_Sprite: {fileID: -6442623195948316603, guid: c05101f9241ffa546a5345fee48ac173, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 1.0316666, y: 1.0133333}
+  m_Size: {x: 0.95166665, y: 0.93666667}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
+--- !u!114 &3888259942721478755
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 436943639570629990}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 79b2108c1019fca4b9e1e6edb8f2f555, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  target: {fileID: 8574263767824785083}
+  seedOffsets:
+  - {x: -0.22, y: 0.06}
+  - {x: 0.18, y: 0.22}
+  - {x: 0.12, y: -0.22}
+  duration: 0.7
+  softness: 0.22
+  stagger: 0.12
 --- !u!1 &3280605815066625928
 GameObject:
   m_ObjectHideFlags: 0
@@ -176,4 +197,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   side: 0
-  cleanEffectPrefab: {fileID: 7744777119608852348, guid: 52bc26a2b7d9dbe49b03ce0dea71c1c2, type: 3}
+  dissolve: {fileID: 0}

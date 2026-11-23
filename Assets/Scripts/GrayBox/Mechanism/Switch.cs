@@ -26,6 +26,7 @@ namespace ThreeCup.GrayBox
         bool pressed;
 
         public bool Pressed => pressed;
+        public MechanismKind Kind => MechanismKind.Switch;
 
         void Awake() => sprite = GetComponentInChildren<SpriteRenderer>();
 

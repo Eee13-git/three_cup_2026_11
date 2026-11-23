@@ -59,6 +59,10 @@ namespace ThreeCup.GrayBox
             motor = GetComponent<PlayerMotor2D>();
             body = GetComponent<Rigidbody2D>();
             if (target == null) target = GetComponent<SpriteRenderer>();
+
+            // 序列帧素材本身朝左，静止时按原图显示即可
+            facingLeft = true;
+            if (target != null) target.flipX = false;
         }
 
         void Update()
@@ -96,7 +100,10 @@ namespace ThreeCup.GrayBox
             else PlayLoop(idle, idleFps, State.Idle);
         }
 
-        /// <summary>镜像的是 sprite 轴心，所以轴心取在角色内容中心才能原地翻转。</summary>
+        /// <summary>
+        /// 镜像的是 sprite 轴心，所以轴心取在角色内容中心才能原地翻转。
+        /// 素材默认朝左：向左移动不翻，向右移动才翻。
+        /// </summary>
         void UpdateFacing(float horizontalVelocity, float speed)
         {
             if (speed <= facingThreshold) return;
@@ -105,7 +112,7 @@ namespace ThreeCup.GrayBox
             if (left == facingLeft) return;
 
             facingLeft = left;
-            target.flipX = facingLeft;
+            target.flipX = !facingLeft;
         }
 
         void PlayAirborne(float verticalSpeed)

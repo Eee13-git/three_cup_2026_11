@@ -329,8 +329,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 37b11bc722bcbb34dac58f820ce76bde, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  side: 0
   owner: {fileID: 516008743}
   offset: {x: 8, y: 0}
+  splitEnabled: 0
+  splitOffset: {x: 0, y: 0.2}
+  primaryScale: 0.65
+  secondaryScale: 0.55
+  secondaryHeightScale: 0.85
 --- !u!1 &364212385
 GameObject:
   m_ObjectHideFlags: 0
@@ -375,8 +381,66 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 37b11bc722bcbb34dac58f820ce76bde, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  side: 1
   owner: {fileID: 2029397887}
   offset: {x: -8, y: 0}
+  splitEnabled: 0
+  splitOffset: {x: 0, y: 0.2}
+  primaryScale: 0.65
+  secondaryScale: 0.55
+  secondaryHeightScale: 0.85
+--- !u!1 &505770642
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 505770644}
+  - component: {fileID: 505770643}
+  m_Layer: 0
+  m_Name: SceneDissolve
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &505770643
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 505770642}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 45bcc69e4961d714eb0f05541bd23d92, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  dissolveMaterial: {fileID: 2100000, guid: a58310434083db044a50ac47566a87a5, type: 2}
+  duration: 1.6
+  softness: 0.6
+  minSortingOrder: 0
+  seedOffsets:
+  - {x: -5, y: 2.6}
+  - {x: 4.8, y: -2.2}
+  - {x: -2.2, y: -3}
+--- !u!4 &505770644
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 505770642}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!4 &516008743 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2542580602119708762, guid: 4382491aed49b514a9df6a6341482136, type: 3}
@@ -663,6 +727,15 @@ MonoBehaviour:
   - {fileID: 364212387}
   showWindowEdge: 1
   windowEdgeStrength: 1
+  dissolveDuration: 1.8
+  holeFeather: 1.1
+  splitX: 0
+  dissolveSoftness: 0.4
+  dissolveSeedOffsets:
+  - {x: -6, y: 3}
+  - {x: 5, y: -3}
+  - {x: -2, y: -4}
+  - {x: 4, y: 4}
 --- !u!1 &585283266
 GameObject:
   m_ObjectHideFlags: 0
@@ -1328,7 +1401,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   leftGoal: {fileID: 0}
   rightGoal: {fileID: 0}
-  requiredSeconds: 0.5
+  requiredSeconds: 0
 --- !u!114 &1593211653
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1359,14 +1432,15 @@ MonoBehaviour:
   leftPlayer: {fileID: 516008745}
   rightPlayer: {fileID: 2029397889}
   winChecker: {fileID: 1593211652}
+  sceneDissolve: {fileID: 505770643}
   levelRoot: {fileID: 547032631}
   leftWindow: {fileID: 287266290}
   rightWindow: {fileID: 364212387}
+  visionFog: {fileID: 550494250}
   livesPerLevel: 3
-  advanceDelay: 1.2
+  advanceDelay: 2
   deathPopupSeconds: 2
   waterStainPrefab: {fileID: 5998564865240848759, guid: c57bb44596a60ba4796d2347ccb924e4, type: 3}
-  cleanBurstPrefab: {fileID: 7744777119608852348, guid: 52bc26a2b7d9dbe49b03ce0dea71c1c2, type: 3}
   enableHotkeys: 1
   startIndex: 0
 --- !u!114 &1593211655
@@ -1580,3 +1654,4 @@ SceneRoots:
   - {fileID: 519420032}
   - {fileID: 619394802}
   - {fileID: 858709171}
+  - {fileID: 505770644}

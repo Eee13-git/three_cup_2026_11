@@ -15,6 +15,9 @@ namespace ThreeCup.GrayBox
         /// <summary>遮盖层本身。</summary>
         public const int Fog = 10;
 
+        /// <summary>压在遮盖层之上的光效：漏光缝的光晕。</summary>
+        public const int FogGlow = 11;
+
         /// <summary>中央分隔墙等框架元素，永远可见。</summary>
         public const int Divider = 15;
 

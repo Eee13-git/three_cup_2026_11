@@ -3,23 +3,21 @@ using UnityEngine;
 namespace ThreeCup.GrayBox
 {
     /// <summary>
-    /// 一关的终点。两人必须同时待在各自的终点里才算通关。
+    /// 一关的污渍（终点）。角色站上去按 F 才能清除；
+    /// 两个污渍都清完才算通关，清完之后不需要继续站着。
     /// </summary>
     [RequireComponent(typeof(Collider2D))]
     public sealed class LevelGoal : MonoBehaviour
     {
         [SerializeField] PlayerSide side = PlayerSide.Left;
-
-        [Tooltip("角色到达时在污渍处播放的清洁晕")]
-        [SerializeField] GameObject cleanEffectPrefab;
+        [SerializeField] StainDissolve dissolve;
 
         public PlayerSide Side => side;
         public bool Occupied { get; private set; }
+        public bool Cleaned { get; private set; }
+        public MechanismKind Kind => MechanismKind.Stain;
 
         public void Configure(PlayerSide newSide) => side = newSide;
-
-        /// <summary>由 LevelSession 在装配关卡时统一注入，避免逐关实例各存一份引用。</summary>
-        public void SetCleanEffect(GameObject prefab) => cleanEffectPrefab = prefab;
 
         void Reset()
         {
@@ -27,13 +25,24 @@ namespace ThreeCup.GrayBox
             if (col != null) col.isTrigger = true;
         }
 
+        void Awake()
+        {
+            if (dissolve == null) dissolve = GetComponentInChildren<StainDissolve>();
+        }
+
+        /// <summary>角色踩在上面时才允许清除。返回是否真的清掉了。</summary>
+        public bool TryClean()
+        {
+            if (Cleaned || !Occupied) return false;
+
+            Cleaned = true;
+            if (dissolve != null) dissolve.Play();
+            return true;
+        }
+
         void OnTriggerEnter2D(Collider2D other)
         {
-            if (!IsOwnCharacter(other)) return;
-
-            Occupied = true;
-            if (cleanEffectPrefab != null)
-                Instantiate(cleanEffectPrefab, transform.position, Quaternion.identity);
+            if (IsOwnCharacter(other)) Occupied = true;
         }
 
         void OnTriggerExit2D(Collider2D other)

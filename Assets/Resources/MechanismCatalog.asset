@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11451e8e7b091f74e994d1ff8ee3ed34, type: 3}
+  m_Name: MechanismCatalog
+  m_EditorClassIdentifier: 
+  entries:
+  - {fileID: 11400000, guid: e10269d91ef472c41b8a6d71e126a9da, type: 2}
+  - {fileID: 11400000, guid: c37769156ea489747b9c507c063e0659, type: 2}
+  - {fileID: 11400000, guid: 2cb23f6e2fb366c4da3b4e9a4cafeeb1, type: 2}
+  - {fileID: 11400000, guid: ec20007ca9c5c83478f137d9ea3301d2, type: 2}
+  - {fileID: 11400000, guid: 0f56935a46bc85e43b999b2b7a301d81, type: 2}
+  - {fileID: 11400000, guid: dddd514990130304ca5fd4178f87c678, type: 2}
+  - {fileID: 11400000, guid: eee857a1ed16d13449317251ef724d9c, type: 2}
+  - {fileID: 11400000, guid: 66c15f24d08340744ae720ffe462b20b, type: 2}

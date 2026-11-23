@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a6ea49986332794ea20272c079b9215, type: 3}
+  m_Name: Mech_Checkpoint
+  m_EditorClassIdentifier: 
+  kind: 4
+  displayName: "\u7559\u767D"
+  subtitle: "\u753B\u7EB8\u4E0A\u6CA1\u843D\u7B14\u7684\u4E00\u5C0F\u5757"
+  lore: "\u753B\u5BB6\u843D\u7B14\u524D\u7559\u51FA\u7684\u4E00\u5C0F\u5757\u7A7A\u767D\uFF0C\u7EB8\u8FD8\u662F\u5E72\u51C0\u7684\u3002\u88AB\u64E6\u6389\u7684\u989C\u6599\u7CBE\u7075\u4F1A\u5728\u8FD9\u91CC\u91CD\u65B0\u805A\u8D77\u6765\u3002"
+  rule: "\u7ECF\u8FC7\u540E\uFF0C\u6B7B\u4EA1\u5C31\u4ECE\u8FD9\u91CC\u590D\u6D3B\u3002"
+  tutorialHint: "\u7ECF\u8FC7\u7559\u767D\uFF0C\u88AB\u64E6\u6389\u540E\u4ECE\u8FD9\u91CC\u56DE\u6765\u3002"
+  icon: {fileID: 21300000, guid: b7f6cc905cc3e0f4f8370b04837e0798, type: 3}

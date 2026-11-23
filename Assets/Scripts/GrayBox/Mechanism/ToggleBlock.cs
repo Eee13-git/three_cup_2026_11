@@ -18,6 +18,7 @@ namespace ThreeCup.GrayBox
         Collider2D body;
 
         public bool Active { get; private set; }
+        public MechanismKind Kind => MechanismKind.ToggleBlock;
 
         void Awake()
         {

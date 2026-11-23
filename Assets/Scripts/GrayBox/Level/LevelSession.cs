@@ -15,13 +15,15 @@ namespace ThreeCup.GrayBox
         [SerializeField] PlayerMotor2D leftPlayer;
         [SerializeField] PlayerMotor2D rightPlayer;
         [SerializeField] WinChecker winChecker;
+        [SerializeField] SceneDissolve sceneDissolve;
         [SerializeField] Transform levelRoot;
         [SerializeField] VisionWindow leftWindow;
         [SerializeField] VisionWindow rightWindow;
+        [SerializeField] VisionFog visionFog;
 
         [Header("Rules")]
         [SerializeField] int livesPerLevel = 3;
-        [SerializeField] float advanceDelay = 1.2f;
+        [SerializeField] float advanceDelay = 2f;
 
         [Tooltip("死亡后锁操作并显示弹窗的时长")]
         [SerializeField] float deathPopupSeconds = 2f;
@@ -29,9 +31,6 @@ namespace ThreeCup.GrayBox
         [Header("Effects")]
         [Tooltip("死亡时在死亡位置播放的水痕")]
         [SerializeField] GameObject waterStainPrefab;
-
-        [Tooltip("角色到达终点时在污渍处播放的清洁晕")]
-        [SerializeField] GameObject cleanBurstPrefab;
 
         [Header("Prototype")]
         [SerializeField] bool enableHotkeys = true;
@@ -47,6 +46,8 @@ namespace ThreeCup.GrayBox
         int deaths;
         Coroutine advance;
         Coroutine deathPause;
+        LevelGoal cachedLeftGoal;
+        LevelGoal cachedRightGoal;
 
         public LevelConfig Current => current;
         public GameObject Instance => instance;
@@ -83,6 +84,13 @@ namespace ThreeCup.GrayBox
 
         void Update()
         {
+            // 站在污渍上按 F 清除自己那一处
+            if (Input.GetKeyDown(KeyCode.F))
+            {
+                if (cachedLeftGoal != null) cachedLeftGoal.TryClean();
+                if (cachedRightGoal != null) cachedRightGoal.TryClean();
+            }
+
             if (!enableHotkeys || catalog == null) return;
 
             for (int i = 0; i < 9 && i < catalog.Count; i++)
@@ -116,6 +124,9 @@ namespace ThreeCup.GrayBox
 
             Unload();
 
+            // 上一关擦掉的常驻对象（中央墙、背景）要在这里还原
+            if (sceneDissolve != null) sceneDissolve.ResetVisuals();
+
             instance = Instantiate(config.LevelPrefab, levelRoot != null ? levelRoot : null);
             instance.name = config.LevelId;
             current = config;
@@ -130,6 +141,8 @@ namespace ThreeCup.GrayBox
             PlacePlayer(rightPlayer, "Spawn_Right");
             ApplyWindows(config);
             WireGoals();
+
+            if (visionFog != null) visionFog.ResetFog();
 
             LivesChanged?.Invoke(LivesRemaining);
         }
@@ -157,16 +170,17 @@ namespace ThreeCup.GrayBox
 
         void ApplyWindows(LevelConfig config)
         {
+            // 压纸钉按 side 找窗口，所以这里必须带上所属侧
             if (leftWindow != null && leftPlayer != null)
             {
                 leftWindow.SetSize(config.WindowSize);
-                leftWindow.Configure(leftPlayer.transform, config.LeftWindowOffset);
+                leftWindow.Configure(leftPlayer.transform, config.LeftWindowOffset, PlayerSide.Left);
             }
 
             if (rightWindow != null && rightPlayer != null)
             {
                 rightWindow.SetSize(config.WindowSize);
-                rightWindow.Configure(rightPlayer.transform, config.RightWindowOffset);
+                rightWindow.Configure(rightPlayer.transform, config.RightWindowOffset, PlayerSide.Right);
             }
         }
 
@@ -205,8 +219,8 @@ namespace ThreeCup.GrayBox
                 right != null ? right.GetComponent<LevelGoal>() : null);
             winChecker.ResetState();
 
-            foreach (var goal in instance.GetComponentsInChildren<LevelGoal>(true))
-                goal.SetCleanEffect(cleanBurstPrefab);
+            cachedLeftGoal = left != null ? left.GetComponent<LevelGoal>() : null;
+            cachedRightGoal = right != null ? right.GetComponent<LevelGoal>() : null;
         }
 
         void HandleDeath(PlayerSide side, DeathCause cause, Vector2 deathPosition)
@@ -276,6 +290,12 @@ namespace ThreeCup.GrayBox
 
         IEnumerator AdvanceAfterDelay()
         {
+            // 两处污渍都清完：遮蔽层用同样的扩散效果整层擦掉
+            if (visionFog != null) yield return visionFog.DissolveRoutine();
+
+            // 再用同一套扩散把画面上其余东西一起擦掉，只留干净的画布
+            if (sceneDissolve != null) yield return sceneDissolve.DissolveRoutine();
+
             yield return new WaitForSeconds(advanceDelay);
             advance = null;
 

@@ -9,6 +9,8 @@ namespace ThreeCup.GrayBox
     [RequireComponent(typeof(Collider2D))]
     public sealed class Hazard : MonoBehaviour
     {
+        public MechanismKind Kind => MechanismKind.Spike;
+
         void Reset()
         {
             var col = GetComponent<Collider2D>();

@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a6ea49986332794ea20272c079b9215, type: 3}
+  m_Name: Mech_Stain
+  m_EditorClassIdentifier: 
+  kind: 5
+  displayName: "\u6C61\u6E0D"
+  subtitle: "\u6D07\u5F00\u7684\u3001\u64E6\u4E0D\u6389\u7684\u90A3\u4E00\u644A"
+  lore: "\u6C34\u6CA1\u5E72\u65F6\u6EF4\u4E0A\u7684\u4E00\u644A\u989C\u8272\uFF0C\u6D07\u8FDB\u7EB8\u91CC\uFF0C\u8D8A\u64E6\u8D8A\u82B1\u3002\u53EA\u6709\u7AD9\u4E0A\u53BB\uFF0C\u7528\u5E72\u51C0\u7684\u7B14\u4E00\u904D\u904D\u628A\u5B83\u5E26\u8D70\u3002"
+  rule: "\u7AD9\u4E0A\u53BB\u6309 F \u6E05\u9664\u3002\u4E24\u5904\u90FD\u6E05\u5B8C\uFF0C\u8FD9\u4E00\u5E45\u624D\u7B97\u753B\u5B8C\u3002"
+  tutorialHint: "\u7AD9\u5230\u6C61\u6E0D\u4E0A\u6309 F\uFF0C\u628A\u5B83\u64E6\u5E72\u51C0\u3002"
+  icon: {fileID: -6442623195948316603, guid: c05101f9241ffa546a5345fee48ac173, type: 3}

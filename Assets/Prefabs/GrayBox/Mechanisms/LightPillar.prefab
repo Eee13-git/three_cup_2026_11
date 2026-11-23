@@ -1,6 +1,6 @@
 %YAML 1.1
 %TAG !u! tag:unity3d.com,2011:
---- !u!1 &7744777119608852348
+--- !u!1 &801302983401027062
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -8,38 +8,37 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 4079914288118676503}
-  - component: {fileID: 9030527644849562101}
-  - component: {fileID: 6622950654648768489}
+  - component: {fileID: 4177431326479322735}
+  - component: {fileID: 7919193976146465593}
   m_Layer: 0
-  m_Name: Effect_CleanBurst
+  m_Name: Glow
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!4 &4079914288118676503
+--- !u!4 &4177431326479322735
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7744777119608852348}
+  m_GameObject: {fileID: 801302983401027062}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_LocalScale: {x: 0.875, y: 0.523, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
-  m_Father: {fileID: 0}
+  m_Father: {fileID: 1101571110953315038}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!212 &9030527644849562101
+--- !u!212 &7919193976146465593
 SpriteRenderer:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7744777119608852348}
+  m_GameObject: {fileID: 801302983401027062}
   m_Enabled: 1
   m_CastShadows: 0
   m_ReceiveShadows: 0
@@ -53,7 +52,7 @@ SpriteRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: a97c105638bdf8b4a8650670310a4cd3, type: 2}
+  - {fileID: 2100000, guid: ec8126395f42e57438ce79a459879854, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -73,40 +72,61 @@ SpriteRenderer:
   m_LightmapParameters: {fileID: 0}
   m_SortingLayerID: 0
   m_SortingLayer: 0
-  m_SortingOrder: 25
-  m_Sprite: {fileID: 21300000, guid: c101ed568a9118c4894f279cda4e3875, type: 3}
+  m_SortingOrder: 11
+  m_Sprite: {fileID: 21300000, guid: 4bb92a73f0947f4418cf6e9bb2a05898, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 1.6, y: 1.6}
+  m_Size: {x: 3.2, y: 6.88}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
---- !u!114 &6622950654648768489
+--- !u!1 &6208186513399192030
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1101571110953315038}
+  - component: {fileID: 2503738634371085797}
+  m_Layer: 0
+  m_Name: LightPillar
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1101571110953315038
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6208186513399192030}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 4177431326479322735}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2503738634371085797
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 7744777119608852348}
+  m_GameObject: {fileID: 6208186513399192030}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: cd031f3d24a51fe409afa882d53a65bc, type: 3}
+  m_Script: {fileID: 11500000, guid: c4545ae62665c6b43a5ea9329016ca50, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  target: {fileID: 9030527644849562101}
-  frames:
-  - {fileID: 21300000, guid: c101ed568a9118c4894f279cda4e3875, type: 3}
-  - {fileID: 21300000, guid: 94a010c86aea27847b6daf13133768c6, type: 3}
-  - {fileID: 21300000, guid: 468d0deee224e784083cb196b3f6a543, type: 3}
-  - {fileID: 21300000, guid: ef4fef2fcfaa53c4d926379814400b3f, type: 3}
-  - {fileID: 21300000, guid: 4ada0d06a7741a645873525c547bae57, type: 3}
-  - {fileID: 21300000, guid: e85916289e4139249845541a4c5e77fb, type: 3}
-  - {fileID: 21300000, guid: d6a1790eff95ded43ae70ad9762f2dd9, type: 3}
-  - {fileID: 21300000, guid: 9f6862a9bf8eb8d4eb76b25939b692ad, type: 3}
-  fps: 12
-  loop: 0
-  destroyOnFinish: 1
+  size: {x: 2.8, y: 3.6}

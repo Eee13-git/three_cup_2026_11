@@ -43,6 +43,7 @@ namespace ThreeCup.GrayBox
         bool jumpRequested;
         bool frozen;
         float invulnerableUntil;
+        MovingPlatform groundPlatform;
 
         public void Configure(PlayerSide newSide) => side = newSide;
 
@@ -138,6 +139,10 @@ namespace ThreeCup.GrayBox
 
             Grounded = CheckGrounded();
 
+            // 站在游动颜料团上时跟着它走，否则平台一移动人就被留在原地
+            if (groundPlatform != null)
+                body.position += groundPlatform.Velocity * Time.fixedDeltaTime;
+
             Vector2 velocity = body.velocity;
             velocity.x = horizontalInput * moveSpeed;
             if (jumpRequested && Grounded) velocity.y = jumpVelocity;
@@ -150,14 +155,25 @@ namespace ThreeCup.GrayBox
         /// <summary>Ray starts just below the collider so it cannot hit ourselves.</summary>
         bool CheckGrounded()
         {
+            groundPlatform = null;
+
             Bounds bounds = bodyCollider.bounds;
             float originY = bounds.min.y - 0.02f;
             float inset = 0.05f;
 
-            if (Physics2D.Raycast(new Vector2(bounds.center.x, originY), Vector2.down, groundRayLength, groundMask)) return true;
-            if (Physics2D.Raycast(new Vector2(bounds.min.x + inset, originY), Vector2.down, groundRayLength, groundMask)) return true;
-            if (Physics2D.Raycast(new Vector2(bounds.max.x - inset, originY), Vector2.down, groundRayLength, groundMask)) return true;
+            if (ProbeGround(new Vector2(bounds.center.x, originY))) return true;
+            if (ProbeGround(new Vector2(bounds.min.x + inset, originY))) return true;
+            if (ProbeGround(new Vector2(bounds.max.x - inset, originY))) return true;
             return false;
+        }
+
+        bool ProbeGround(Vector2 origin)
+        {
+            var hit = Physics2D.Raycast(origin, Vector2.down, groundRayLength, groundMask);
+            if (hit.collider == null) return false;
+
+            groundPlatform = hit.collider.GetComponentInParent<MovingPlatform>();
+            return true;
         }
     }
 }

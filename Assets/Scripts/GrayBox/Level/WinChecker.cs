@@ -3,13 +3,15 @@ using UnityEngine;
 namespace ThreeCup.GrayBox
 {
     /// <summary>
-    /// 通关条件：两名角色同时待在自己的终点里。
+    /// 通关条件：两处污渍都被清除（各自站上去按 F）。
     /// </summary>
     public sealed class WinChecker : MonoBehaviour
     {
         [SerializeField] LevelGoal leftGoal;
         [SerializeField] LevelGoal rightGoal;
-        [SerializeField] float requiredSeconds = 0.5f;
+
+        [Tooltip("两个污渍都清除后，还要保持多久才判定通关")]
+        [SerializeField] float requiredSeconds;
 
         public event System.Action Won;
 
@@ -34,14 +36,20 @@ namespace ThreeCup.GrayBox
         {
             if (Completed) return;
 
-            bool bothInside = leftGoal != null && rightGoal != null &&
-                              leftGoal.Occupied && rightGoal.Occupied;
+            bool bothCleaned = leftGoal != null && rightGoal != null &&
+                               leftGoal.Cleaned && rightGoal.Cleaned;
 
-            heldSeconds = bothInside ? heldSeconds + Time.deltaTime : 0f;
+            if (!bothCleaned)
+            {
+                heldSeconds = 0f;
+                return;
+            }
+
+            heldSeconds += Time.deltaTime;
             if (heldSeconds < requiredSeconds) return;
 
             Completed = true;
-            Debug.Log("[GrayBox] 通关：两名角色同时站在各自的终点内");
+            Debug.Log("[GrayBox] 通关：两处污渍都已清除");
             Won?.Invoke();
         }
     }

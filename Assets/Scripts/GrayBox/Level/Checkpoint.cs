@@ -17,6 +17,7 @@ namespace ThreeCup.GrayBox
 
         public PlayerSide Side => side;
         public int Order => order;
+        public MechanismKind Kind => MechanismKind.Checkpoint;
 
         public void Configure(PlayerSide newSide, int newOrder)
         {

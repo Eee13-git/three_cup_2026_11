@@ -1,0 +1,84 @@
+using UnityEngine;
+
+namespace ThreeCup.GrayBox
+{
+    /// <summary>
+    /// 折痕：纸被折过的一道棱。颜料精灵靠近时，透光口沿这道棱翻到另一侧，
+    /// 于是能看到折过去的那个高度；走开就恢复原样。
+    /// 折痕斜放时，视线也会跟着斜过去，所以能照到高台或坑底。
+    /// </summary>
+    public sealed class CreaseLine : MonoBehaviour
+    {
+        [Tooltip("角色离折痕多近开始生效（世界单位）")]
+        [SerializeField] float influence = 2.5f;
+
+        [Tooltip("折痕在本地空间的起点")]
+        [SerializeField] Vector2 localStart = new Vector2(-3.3f, 0f);
+
+        [Tooltip("折痕在本地空间的终点")]
+        [SerializeField] Vector2 localEnd = new Vector2(3.3f, 0f);
+
+        [SerializeField] SpriteRenderer visual;
+
+        VisionWindow[] windows;
+
+        public MechanismKind Kind => MechanismKind.Crease;
+
+        void Awake()
+        {
+            if (visual == null) visual = GetComponent<SpriteRenderer>();
+        }
+
+        void Update()
+        {
+            if (windows == null) windows = FindObjectsOfType<VisionWindow>();
+
+            Vector2 a = transform.TransformPoint(localStart);
+            Vector2 b = transform.TransformPoint(localEnd);
+
+            for (int i = 0; i < windows.Length; i++)
+            {
+                var window = windows[i];
+                if (window == null) continue;
+
+                var owner = window.Owner;
+                if (owner == null) continue;
+
+                float distance = DistanceToSegment(owner.position, a, b);
+                if (distance <= influence) window.SetCrease(a, b);
+                else window.ClearCrease();
+            }
+        }
+
+        void OnDisable()
+        {
+            if (windows == null) return;
+
+            for (int i = 0; i < windows.Length; i++)
+                if (windows[i] != null) windows[i].ClearCrease();
+        }
+
+        static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float lengthSq = ab.sqrMagnitude;
+            if (lengthSq < 0.000001f) return Vector2.Distance(point, a);
+
+            float t = Mathf.Clamp01(Vector2.Dot(point - a, ab) / lengthSq);
+            return Vector2.Distance(point, a + ab * t);
+        }
+
+        public void Configure(float newInfluence, Vector2 start, Vector2 end)
+        {
+            influence = newInfluence;
+            localStart = start;
+            localEnd = end;
+        }
+
+        void OnDrawGizmos()
+        {
+            Gizmos.color = new Color(1f, 0.85f, 0.55f, 0.8f);
+            Gizmos.DrawLine(transform.TransformPoint(localStart), transform.TransformPoint(localEnd));
+        }
+    }
+}

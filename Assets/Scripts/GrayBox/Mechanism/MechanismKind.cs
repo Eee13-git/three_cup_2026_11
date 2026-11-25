@@ -36,6 +36,24 @@ namespace ThreeCup.GrayBox
         MovingPlatform = 9,
 
         /// <summary>分光缝</summary>
-        SplitAperture = 10
+        SplitAperture = 10,
+
+        /// <summary>折痕</summary>
+        Crease = 11,
+
+        /// <summary>透镜（露珠，视窗缩放）</summary>
+        Lens = 12,
+
+        /// <summary>弹床（圆蘑菇）</summary>
+        SpringBed = 13,
+
+        /// <summary>双压板（石压板）</summary>
+        TandemPlate = 14,
+
+        /// <summary>升降台</summary>
+        Lift = 15,
+
+        /// <summary>照面灯（点亮对面视野）</summary>
+        Beacon = 16
     }
 }

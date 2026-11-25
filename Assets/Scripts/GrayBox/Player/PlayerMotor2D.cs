@@ -43,7 +43,7 @@ namespace ThreeCup.GrayBox
         bool jumpRequested;
         bool frozen;
         float invulnerableUntil;
-        MovingPlatform groundPlatform;
+        IPlatformMover groundPlatform;
 
         public void Configure(PlayerSide newSide) => side = newSide;
 
@@ -172,7 +172,7 @@ namespace ThreeCup.GrayBox
             var hit = Physics2D.Raycast(origin, Vector2.down, groundRayLength, groundMask);
             if (hit.collider == null) return false;
 
-            groundPlatform = hit.collider.GetComponentInParent<MovingPlatform>();
+            groundPlatform = hit.collider.GetComponentInParent<IPlatformMover>();
             return true;
         }
     }

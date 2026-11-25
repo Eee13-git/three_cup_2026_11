@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a6ea49986332794ea20272c079b9215, type: 3}
+  m_Name: Mech_Crease
+  m_EditorClassIdentifier: 
+  kind: 11
+  displayName: "\u6298\u75D5"
+  subtitle: "\u7EB8\u88AB\u6298\u8FC7\u7684\u4E00\u9053\u68F1"
+  lore: "\u753B\u5230\u4E00\u534A\u65F6\u7EB8\u88AB\u6298\u8FC7\u4E00\u9053\uFF0C\u538B\u51FA\u4E86\u68F1\u3002\u6298\u8FC7\u7684\u90A3\u7247\u4E0D\u518D\u5E73\u6574\uFF0C\u5149\u6CBF\u68F1\u62D0\u4E86\u4E2A\u5F2F\u2014\u2014\u900F\u8FC7\u6298\u75D5\u770B\u8FC7\u53BB\uFF0C\u770B\u5230\u7684\u662F\u68F1\u53E6\u4E00\u4FA7\u7684\u753B\u3002"
+  rule: "\u8D70\u8FD1\u6298\u75D5\u65F6\uFF0C\u900F\u5149\u53E3\u4F1A\u6CBF\u68F1\u7FFB\u5230\u53E6\u4E00\u4FA7\uFF0C\u80FD\u770B\u5230\u6298\u8FC7\u53BB\u7684\u90A3\u4E2A\u9AD8\u5EA6\uFF1B\u8D70\u5F00\u5C31\u6062\u590D\u539F\u6837\u3002"
+  tutorialHint: "\u9760\u8FD1\u6298\u75D5\uFF0C\u900F\u5149\u53E3\u4F1A\u88AB\u6298\u5230\u53E6\u4E00\u4FA7\u3002"
+  icon: {fileID: -1363848632311909146, guid: 72d9b71f3aaad9548a59ba2d41308d33, type: 3}

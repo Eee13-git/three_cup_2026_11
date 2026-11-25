@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a6ea49986332794ea20272c079b9215, type: 3}
+  m_Name: Mech_Beacon
+  m_EditorClassIdentifier: 
+  kind: 16
+  displayName: "\u7167\u9762\u706F"
+  subtitle: "\u53EA\u5728\u5BF9\u9762\u70B9\u4EAE\u7684\u4E00\u76CF\u706F"
+  lore: "\u753B\u91CC\u8DEF\u8FB9\u7ACB\u7740\u4E00\u76CF\u706F\uFF0C\u706F\u82AF\u4E00\u76F4\u8FDE\u5230\u5BF9\u9762\u753B\u5E03\u7684\u4E00\u89D2\u3002\u8E29\u4E0B\u53BB\uFF0C\u706F\u4EAE\uFF0C\u5BF9\u9762\u90A3\u4E00\u5757\u4E5F\u8DDF\u7740\u900F\u51FA\u5149\u6765\u3002\u706F\u53EA\u6709\u4E00\u76CF\u4EAE\u7740\u2014\u2014\u65B0\u7684\u70B9\u4EAE\uFF0C\u65E7\u7684\u81EA\u5DF1\u706D\u3002"
+  rule: "\u8E29\u4E00\u4E0B\u70B9\u4EAE\u5BF9\u9762\uFF0C\u518D\u8E29\u7184\u706D\u3002\u5168\u573A\u540C\u65F6\u53EA\u80FD\u4EAE\u4E00\u76CF\uFF0C\u6240\u4EE5\u8981\u6362\u4F4D\u7F6E\u53EA\u80FD\u53BB\u8E29\u4E0B\u4E00\u76CF\u3002"
+  tutorialHint: "\u8E29\u706F\u53EF\u4EE5\u7167\u4EAE\u5BF9\u9762\u4E00\u5757\uFF0C\u4E00\u6B21\u53EA\u80FD\u4EAE\u4E00\u76CF\u3002"
+  icon: {fileID: -2837222740565899385, guid: 1d46adc33845a8349bdf3e208919fbc6, type: 3}

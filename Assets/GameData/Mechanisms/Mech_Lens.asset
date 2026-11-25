@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a6ea49986332794ea20272c079b9215, type: 3}
+  m_Name: Mech_Lens
+  m_EditorClassIdentifier: 
+  kind: 12
+  displayName: "\u900F\u955C"
+  subtitle: "\u8349\u53F6\u4E0A\u51DD\u7740\u7684\u4E00\u6EF4\u6C34"
+  lore: "\u9732\u6C34\u628A\u753B\u91CC\u7684\u4E1C\u897F\u653E\u5927\u4E86\u4E00\u5708\u3002\u900F\u8FC7\u5B83\u770B\uFF0C\u5BF9\u9762\u90A3\u6761\u7A84\u6865\u7684\u6BCF\u4E00\u5757\u77F3\u5934\u90FD\u53D8\u5F97\u6E05\u695A\uFF0C\u53EF\u8FB9\u7F18\u4E5F\u8DDF\u7740\u6655\u5F00\u4E86\u3002"
+  rule: "\u8E29\u4E00\u4E0B\u653E\u5927\uFF0C\u518D\u8E29\u7F29\u6210\u4E00\u5C0F\u5757\uFF0C\u7B2C\u4E09\u6B21\u6062\u590D\u3002\u653E\u5927\u770B\u5F97\u8FDC\u4F46\u5BF9\u9762\u8FD1\u7AEF\u4F1A\u6F0F\u6389\uFF0C\u7F29\u5C0F\u770B\u5F97\u7A84\u4F46\u843D\u70B9\u66F4\u51C6\u3002"
+  tutorialHint: "\u8E29\u9732\u73E0\u53EF\u4EE5\u653E\u5927\u6216\u7F29\u5C0F\u900F\u5149\u53E3\u3002"
+  icon: {fileID: 6846066635375595620, guid: c15325e033040f14a8f381829321938d, type: 3}

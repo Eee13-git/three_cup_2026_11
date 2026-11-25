@@ -102,6 +102,15 @@ namespace ThreeCup.GrayBox
             }
         }
 
+        /// <summary>进关绘制时先把遮蔽层藏起来，绘制结束后由 ResetFog 恢复。</summary>
+        public void SetVisible(bool visible)
+        {
+            EnsureRefs();
+            if (fog == null) return;
+
+            fog.enabled = visible;
+        }
+
         /// <summary>从几个起点向外扩散，把整层遮蔽擦掉。</summary>
         public IEnumerator DissolveRoutine()
         {
@@ -198,18 +207,18 @@ namespace ThreeCup.GrayBox
             fog.SetPropertyBlock(block);
         }
 
-        /// <summary>漏光缝也遵守中线裁剪，避免照到对侧半屏。</summary>
+        /// <summary>远程点亮的可见区域，同样遵守中线裁剪。</summary>
         void CollectHoles()
         {
             int count = 0;
-            var pillars = LightPillar.Active;
+            var registry = VisionHoleRegistry.Items;
 
-            for (int i = 0; i < pillars.Count && count < MaxHoles; i++)
+            for (int i = 0; i < registry.Count && count < MaxHoles; i++)
             {
-                var pillar = pillars[i];
-                if (pillar == null || !pillar.isActiveAndEnabled) continue;
+                var hole = registry[i];
+                if (hole == null || !hole.HoleActive) continue;
 
-                Vector4 rect = PackRect(pillar.Center, pillar.HalfSize);
+                Vector4 rect = PackRect(hole.HoleCenter, hole.HoleHalfSize);
                 if (rect.z <= 0.002f) continue;
 
                 holes[count++] = rect;

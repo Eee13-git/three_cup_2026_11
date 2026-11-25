@@ -16,14 +16,23 @@ namespace ThreeCup.GrayBox
         [Tooltip("使用 GrayBox/StainDissolve 的材质")]
         [SerializeField] Material dissolveMaterial;
 
-        [Tooltip("整体擦掉的时长")]
-        [SerializeField] float duration = 1.2f;
+        [Tooltip("通关擦除的时长")]
+        [SerializeField] float duration = 1.6f;
+
+        [Tooltip("进关绘制前，空白画布静止展示的时长")]
+        [SerializeField] float revealHold = 1f;
+
+        [Tooltip("进关绘制的时长（逆特效）")]
+        [SerializeField] float revealDuration = 1.4f;
 
         [Tooltip("边缘羽化，越大过渡越柔")]
         [SerializeField, Range(0.01f, 2f)] float softness = 0.6f;
 
-        [Tooltip("低于这个排序的精灵不擦除（背景是 -10）")]
-        [SerializeField] int minSortingOrder = 0;
+        [Tooltip("低于这个排序的精灵不参与（空白画布是 -20，斑驳背景是 -10）")]
+        [SerializeField] int minSortingOrder = -10;
+
+        [Tooltip("这个排序的精灵不参与——遮蔽层要一直盖着，由 VisionFog 自己管")]
+        [SerializeField] int skipSortingOrder = GrayBoxSorting.Fog;
 
         [Tooltip("扩散起点，相对画面中心的偏移；留空则用四象限默认点")]
         [SerializeField] Vector2[] seedOffsets =
@@ -89,9 +98,80 @@ namespace ThreeCup.GrayBox
             IsDissolving = false;
         }
 
+        /// <summary>
+        /// 进关时的"画回来"：从完全擦除的状态开始，让扩散半径反向收缩，
+        /// 画面内容从种子点向外长出来。玩家在这期间应当是冻结的。
+        /// </summary>
+        public IEnumerator RevealRoutine()
+        {
+            if (IsDissolving) yield break;
+            if (dissolveMaterial == null) yield break;
+
+            CollectTargets();
+            if (targets.Count == 0) yield break;
+
+            IsDissolving = true;
+            runtime = new Material(dissolveMaterial);
+            PrepareSeeds();
+
+            // 起始状态：整屏都被擦掉，只剩底下的空白画布
+            for (int i = 0; i < MaxSeeds; i++) radii[i] = maxRadii[i];
+            Push();
+
+            for (int i = 0; i < targets.Count; i++)
+            {
+                targetOriginals.Add(targets[i].sharedMaterial);
+                targets[i].sharedMaterial = runtime;
+                targets[i].enabled = true;
+            }
+
+            // 先让空白画布停一会儿，再开始画
+            if (revealHold > 0f) yield return new WaitForSeconds(revealHold);
+
+            float timer = 0f;
+            while (timer < 1f)
+            {
+                timer += Time.deltaTime / Mathf.Max(revealDuration, 0.01f);
+                UpdateRadii(1f - Mathf.Clamp01(timer));
+                Push();
+                yield return null;
+            }
+
+            UpdateRadii(0f);
+            Push();
+            yield return null;
+
+            RestoreMaterials();
+            IsDissolving = false;
+        }
+
+        void RestoreMaterials()
+        {
+            for (int i = 0; i < targets.Count; i++)
+            {
+                var renderer = targets[i];
+                if (renderer == null) continue;
+
+                renderer.sharedMaterial = targetOriginals[i];
+                renderer.enabled = true;
+            }
+
+            targets.Clear();
+            targetOriginals.Clear();
+
+            if (runtime != null)
+            {
+                Destroy(runtime);
+                runtime = null;
+            }
+        }
+
         /// <summary>下一关加载前恢复常驻对象的显示。</summary>
         public void ResetVisuals()
         {
+            // 显现 / 擦除被中断时，先把正在用的材质还回去
+            RestoreMaterials();
+
             for (int i = 0; i < hidden.Count; i++)
             {
                 var renderer = hidden[i];
@@ -103,14 +183,6 @@ namespace ThreeCup.GrayBox
 
             hidden.Clear();
             hiddenOriginals.Clear();
-            targets.Clear();
-            targetOriginals.Clear();
-
-            if (runtime != null)
-            {
-                Destroy(runtime);
-                runtime = null;
-            }
 
             IsDissolving = false;
         }
@@ -124,6 +196,7 @@ namespace ThreeCup.GrayBox
             {
                 if (!renderer.enabled) continue;
                 if (renderer.sortingOrder < minSortingOrder) continue;
+                if (renderer.sortingOrder == skipSortingOrder) continue;
 
                 targets.Add(renderer);
             }

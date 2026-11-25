@@ -7,7 +7,7 @@ namespace ThreeCup.GrayBox
     /// 玩家站在上面会跟着一起被带走（由 PlayerMotor2D 读取 Velocity 补偿）。
     /// </summary>
     [RequireComponent(typeof(Rigidbody2D))]
-    public sealed class MovingPlatform : MonoBehaviour
+    public sealed class MovingPlatform : MonoBehaviour, IPlatformMover
     {
         [Tooltip("相对起始位置的往返位移")]
         [SerializeField] Vector2 travel = new Vector2(6f, 0f);

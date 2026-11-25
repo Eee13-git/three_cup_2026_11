@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a6ea49986332794ea20272c079b9215, type: 3}
+  m_Name: Mech_TandemPlate
+  m_EditorClassIdentifier: 
+  kind: 14
+  displayName: "\u53CC\u538B\u677F"
+  subtitle: "\u4E24\u5757\u5FC5\u987B\u540C\u65F6\u8E29\u4F4F\u7684\u77F3\u677F"
+  lore: "\u753B\u91CC\u94FA\u7740\u4E24\u5757\u76F8\u9694\u5F88\u8FDC\u7684\u77F3\u677F\u3002\u53EA\u6709\u4E24\u8FB9\u540C\u65F6\u538B\u4E0B\uFF0C\u4E2D\u95F4\u90A3\u4E00\u7B14\u624D\u4F1A\u8FDE\u8D77\u6765\u3002"
+  rule: "\u4E24\u4E2A\u4EBA\u5404\u8E29\u4E00\u5757\uFF0C\u6865\u624D\u4F1A\u51FA\u73B0\uFF1B\u6709\u4E00\u4E2A\u4EBA\u79BB\u5F00\uFF0C\u6865\u5C31\u65AD\u5F00\u3002"
+  tutorialHint: "\u4E24\u4EBA\u540C\u65F6\u8E29\u4F4F\u77F3\u677F\uFF0C\u6865\u624D\u4F1A\u51FA\u73B0\u3002"
+  icon: {fileID: 2042098323184131647, guid: 2f22fc313394b344dba6de09a06216c8, type: 3}

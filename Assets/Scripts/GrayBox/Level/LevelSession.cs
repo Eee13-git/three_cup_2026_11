@@ -23,7 +23,7 @@ namespace ThreeCup.GrayBox
 
         [Header("Rules")]
         [SerializeField] int livesPerLevel = 3;
-        [SerializeField] float advanceDelay = 2f;
+        [SerializeField] float advanceDelay = 1f;
 
         [Tooltip("死亡后锁操作并显示弹窗的时长")]
         [SerializeField] float deathPopupSeconds = 2f;
@@ -46,6 +46,7 @@ namespace ThreeCup.GrayBox
         int deaths;
         Coroutine advance;
         Coroutine deathPause;
+        Coroutine reveal;
         LevelGoal cachedLeftGoal;
         LevelGoal cachedRightGoal;
 
@@ -142,9 +143,23 @@ namespace ThreeCup.GrayBox
             ApplyWindows(config);
             WireGoals();
 
+            // 遮蔽层从进关第一帧就盖住，显现动画只在它下面进行
             if (visionFog != null) visionFog.ResetFog();
+            if (reveal != null) StopCoroutine(reveal);
+            reveal = StartCoroutine(RevealSequence());
 
             LivesChanged?.Invoke(LivesRemaining);
+        }
+
+        IEnumerator RevealSequence()
+        {
+            SetPlayersFrozen(true);
+
+            if (sceneDissolve != null) yield return sceneDissolve.RevealRoutine();
+
+            if (!Failed) SetPlayersFrozen(false);
+
+            reveal = null;
         }
 
         public void Unload()
@@ -165,6 +180,12 @@ namespace ThreeCup.GrayBox
             {
                 StopCoroutine(deathPause);
                 deathPause = null;
+            }
+
+            if (reveal != null)
+            {
+                StopCoroutine(reveal);
+                reveal = null;
             }
         }
 

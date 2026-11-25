@@ -1,69 +1,76 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 namespace ThreeCup.GrayBox
 {
     /// <summary>
-    /// 死亡弹窗。临时实现（IMGUI），正式 UI 做好后整块删掉。
-    /// 弹出期间 LevelSession 已经锁住了两个角色的操作。
+    /// 死亡弹窗：一张米白笔触 +「角色A已死亡 / 操作已锁定 2 秒」。
+    /// 弹出期间 LevelSession 已经锁住了两个角色的操作，所以这里只负责显示。
     /// </summary>
     public sealed class DeathPopup : MonoBehaviour
     {
         [SerializeField] LevelSession session;
 
-        GUIStyle title;
-        GUIStyle subtitle;
+        [Header("Visual")]
+        [SerializeField] CanvasGroup group;
+        [SerializeField] Text titleText;
+        [SerializeField] Text subtitleText;
+
+        [Header("Text")]
+        [SerializeField] string leftLetter = "A";
+        [SerializeField] string rightLetter = "B";
+        [SerializeField] Color letterColor = new Color32(0xA1, 0x50, 0x3F, 0xFF);
+        [SerializeField] string subtitle = "操作已锁定 2 秒";
+
+        PlayerSide? shownSide;
+        bool? shownVisible;
 
         void Awake()
         {
             if (session == null) session = FindObjectOfType<LevelSession>();
-        }
 
-        void OnGUI()
-        {
-            if (session == null || !session.DeathPopupVisible) return;
-
-            if (title == null)
+            if (titleText != null) titleText.font = PopupFont.Serif;
+            if (subtitleText != null)
             {
-                title = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = 52,
-                    alignment = TextAnchor.MiddleCenter,
-                    fontStyle = FontStyle.Bold,
-                    font = PopupFont.Cjk
-                };
-                title.normal.textColor = new Color(1f, 0.36f, 0.32f);
-
-                subtitle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = 20,
-                    alignment = TextAnchor.MiddleCenter,
-                    font = PopupFont.Cjk
-                };
-                subtitle.normal.textColor = new Color(1f, 1f, 1f, 0.75f);
+                subtitleText.font = PopupFont.Serif;
+                subtitleText.text = subtitle;
             }
 
-            var previous = GUI.color;
+            SetVisible(false);
+        }
 
-            GUI.color = new Color(0f, 0f, 0f, 0.55f);
-            GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
+        void Update()
+        {
+            bool visible = session != null && session.DeathPopupVisible && Time.timeScale > 0f;
+            if (visible) RefreshContent();
+            SetVisible(visible);
+        }
 
-            float w = Mathf.Min(620f, Screen.width - 80f);
-            float h = 220f;
-            float x = (Screen.width - w) * 0.5f;
-            float y = (Screen.height - h) * 0.5f;
+        void RefreshContent()
+        {
+            var side = session.DeathPopupSide;
+            if (shownSide.HasValue && shownSide.Value == side) return;
+            shownSide = side;
 
-            GUI.color = new Color(0.10f, 0.03f, 0.04f, 0.96f);
-            GUI.DrawTexture(new Rect(x, y, w, h), Texture2D.whiteTexture);
+            if (titleText == null) return;
 
-            GUI.color = new Color(0.95f, 0.35f, 0.32f, 1f);
-            GUI.DrawTexture(new Rect(x, y, w, 4f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(x, y + h - 4f, w, 4f), Texture2D.whiteTexture);
+            string letter = side == PlayerSide.Left ? leftLetter : rightLetter;
+            string hex = ColorUtility.ToHtmlStringRGB(letterColor);
+            titleText.text = $"角色<color=#{hex}>{letter}</color>已死亡";
+        }
 
-            GUI.color = previous;
+        void SetVisible(bool visible)
+        {
+            if (shownVisible.HasValue && shownVisible.Value == visible) return;
+            shownVisible = visible;
 
-            string who = session.DeathPopupSide == PlayerSide.Left ? "角色A" : "角色B";
-            GUI.Label(new Rect(x, y + 48f, w, 72f), $"{who} 已死亡", title);
-            GUI.Label(new Rect(x, y + 138f, w, 32f), "操作已锁定 2 秒", subtitle);
+            if (group == null) return;
+            group.alpha = visible ? 1f : 0f;
+            group.blocksRaycasts = false;
+            group.interactable = false;
+
+            // 隐藏时清掉缓存的侧别，下次弹出一定重新拼一次标题
+            if (!visible) shownSide = null;
         }
     }
 }

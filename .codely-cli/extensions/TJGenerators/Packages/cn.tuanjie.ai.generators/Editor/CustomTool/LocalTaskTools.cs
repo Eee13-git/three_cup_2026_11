@@ -39,6 +39,8 @@ namespace UnityTcp.Editor.Tools
                 Ids = () => ImportModelTaskTracker.GetAllTasks().Select(t => t.TaskId), Query = Import3DModelFromUrlTool.QueryImportStatus },
             new Source { Type = "image_import", Contains = id => ImportImageTaskTracker.GetTask(id) != null,
                 Ids = () => ImportImageTaskTracker.GetAllTasks().Select(t => t.TaskId), Query = ImportImageFromUrlTool.QueryImportStatus },
+            new Source { Type = "sprite_sequence_import", Contains = id => ImportSpriteSequenceTaskTracker.GetTask(id) != null,
+                Ids = () => ImportSpriteSequenceTaskTracker.GetAllTasks().Select(t => t.TaskId), Query = ImportSpriteSequenceFromUrlTool.QueryImportStatus },
             new Source { Type = "audio_import", Contains = id => AudioImportTaskTracker.GetTask(id) != null,
                 Ids = () => AudioImportTaskTracker.GetAllTasks().Select(t => t.TaskId), Query = ImportMediaFromUrlTool.QueryAudioImportStatus },
             new Source { Type = "video_import", Contains = id => VideoImportTaskTracker.GetTask(id) != null,
@@ -64,7 +66,7 @@ namespace UnityTcp.Editor.Tools
         [ExecuteCustomTool.CustomTool("query_local_task",
             "Query ONE Unity-local generation, import or post-processing task. Required: task_id (use the apply_task_id value for terrain application); " +
             "optional task_type disambiguates recovered IDs. Types: image, image_layers, sprite, material, skybox (legacy), " +
-            "terrain, terrain_apply, model_import, image_import, audio_import, video_import. " +
+            "terrain, terrain_apply, model_import, image_import, sprite_sequence_import, audio_import, video_import. " +
             "Returns original status, progress, asset paths and type-specific fields, plus task_type. UI Kit stages live in image/image_layers; " +
             "skybox MCP downloads use image_import. MCP-originated generation IDs must go to MCP check_task instead. " +
             "Wait between checks, keep the same task ID while pending, and verify real assets before reporting completion.")]

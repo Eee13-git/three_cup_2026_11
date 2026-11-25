@@ -1,6 +1,6 @@
 ---
 name: unity-place-assets-in-scene
-description: 将 Unity 资产放入当前场景，支持自然语言描述位置/旋转/缩放。触发条件：用户要求放置或给出位置意图（"放到场景"、"放在桌子旁边"、"scale 0.5"等）；用户询问资产为何未出现在场景；3D 模型任务提交后默认立即放置占位 Prefab（除非用户明确不需要）；generate_sprite 完成后主动放置。支持 Prefab / Sprite / AudioClip / Material / Cubemap / AnimationClip / TerrainData。不负责生成资产本身。
+description: 将 Unity 资产放入当前场景，支持自然语言描述位置/旋转/缩放。触发条件：用户要求放置或给出位置意图（"放到场景"、"放在桌子旁边"、"scale 0.5"等）；用户询问资产为何未出现在场景；3D 模型任务提交后默认立即放置占位 Prefab（除非用户明确不需要）；Sprite 导入后主动放置。支持 Prefab / Sprite / AudioClip / Material / Cubemap / AnimationClip / TerrainData。不负责生成资产本身。
 ---
 
 > 使用宿主的 `exec_editor_script` 执行 C#；入口不可用时报告缺失，不猜测其他工具名。
@@ -24,14 +24,14 @@ description: 将 Unity 资产放入当前场景，支持自然语言描述位置
 
 | 类型 | 典型来源 | 放置方式 |
 |------|---------|---------|
-| Prefab（`.prefab`） | `import_3d_model_from_url`（MCP `generate_3d_model` / `unirig_rig` / `tripo_texture_model` 生成后落地；含 add_motion / rigged / motion 模式） | `PrefabUtility.InstantiatePrefab` |
-| Sprite（`.png`，`TextureImporterType.Sprite`） | `generate_sprite` | 新建空 GameObject + `SpriteRenderer`，或 Canvas 子节点 + `UnityEngine.UI.Image` |
+| Prefab（`.prefab`） | `import_3d_model_from_url`（MCP `generate_3d_model` / `unirig_rig` / `unimate_motion_generate` / `tripo_texture_model` 生成后落地；含 `static` / `rigged` / `motion` 模式） | `PrefabUtility.InstantiatePrefab` |
+| Sprite（`.png`，`TextureImporterType.Sprite`） | MCP `generate_image` + `import_image_from_url(import_type="sprite")` | 新建空 GameObject + `SpriteRenderer`，或 Canvas 子节点 + `UnityEngine.UI.Image` |
 | AudioClip BGM（`.wav`） | `import_audio_from_url`（MCP `generate_music` 生成后落地；is_bgm=true 时导入工具已自动创建/复用 BGMPlayer） | `AudioSource`，`loop=true`，`spatialBlend=0` |
 | AudioClip SFX（`.wav` / `.mp3`） | `import_audio_from_url`（MCP `generate_sound_effect` / `generate_tts` 生成后落地） | `AudioSource`，`loop=false`，`spatialBlend=1` |
 | VideoClip（`.mp4`） | `import_video_from_url`（MCP `generate_video` / `generate_effect_video` 生成后落地） | `VideoPlayer`（绿幕特效视频配 ChromaKey 材质 + RenderTexture） |
 | Material（`.mat`） | `generate_material` | `Renderer.sharedMaterial = material` |
 | Cubemap Skybox（`.mat`） | MCP `generate_skybox` → `import_image_from_url(import_type="skybox")` | Built-in / URP: `RenderSettings.skybox = material`；HDRP 使用 HDRI Sky Volume |
-| AnimationClip（`.anim`） | MCP `generate_sprite_animation` / `generate_eight_dir_sprite` 切帧后 | `AnimatorController + Animator` |
+| AnimationClip（`.anim`） | MCP `generate_sprite_animation` 的结果由 `import_sprite_sequence_from_url` 导入；八向图按其实际布局切帧后 | `AnimatorController + Animator` |
 | Texture2D / Image（`.png` / `.jpg`） | `generate_image` | 赋给 `Material.mainTexture`，或创建 `RawImage` |
 | Heightmap（`.png`）→ Terrain | `generate_terrain` | 调用 `apply_terrain_heightmap` |
 | TerrainData（`.asset`） | 已有地形资源 | `Terrain.CreateTerrainGameObject` |
@@ -164,7 +164,7 @@ UnityEditor.SceneManagement.EditorSceneManager.MarkAllScenesDirty();
 重要：`unity_gameobject` 只会创建空对象，永远不要用它来放真实 Prefab，必须用 `exec_editor_script`。
 
 适用场景：
-- `import_3d_model_from_url` 正常流程：任务启动后立刻用 `prefab_output_path` 放置占位 Prefab（Cube/Capsule）；生成完成后 Placeholder 子节点会自动被真实模型替换，无需二次调用（rigged 导入后 Animator 与 AnimatorController 自动绑定；add_motion 从零流程同理）
+- `import_3d_model_from_url` 正常流程：任务启动后立刻用 `prefab_output_path` 放置占位 Prefab（Cube/Capsule）；生成完成后 Placeholder 子节点会自动被真实模型替换，无需二次调用（rigged / motion 导入后 Animator、Avatar 与多状态 AnimatorController 自动绑定）
 - 将已完成的 Prefab 放入另一个场景
 
 ```csharp
@@ -186,7 +186,7 @@ Undo.RegisterCreatedObjectUndo(instance, "放置 Prefab");
 UnityEditor.SceneManagement.EditorSceneManager.MarkAllScenesDirty();
 ```
 
-带动画角色（import_3d_model_from_url + add_motion / rigged / motion 模式）生成时，Animator、Avatar 与 AnimatorController 会在生成完成后自动绑定；这里只需正常实例化。
+带动画角色（import_3d_model_from_url + rigged / motion 模式）导入时，Animator、Avatar 与多状态 AnimatorController 会自动绑定；这里只需正常实例化。
 
 ### 4b. Sprite
 
@@ -563,6 +563,8 @@ for (int i = 0; i < count; i++) {
 
 ## 截图验证
 
+交互或动画的实际运行效果按[共享验收约定](../../experience/templates/generator-async-pattern.md#完成与续接)检查。下文用于核对静态放置。
+
 仅当用户反馈”看不到””朝向不对””漂浮””太大/太小”等问题时，才触发截图验证。
 
 截图使用 `unity_screenshot` 工具，有效的 `action` 值为：
@@ -593,6 +595,6 @@ for (int i = 0; i < count; i++) {
 
 ## 使用提示
 
-- `generate_sprite`：拿到 `placeholder_path` 后立即调用本 skill，通常最省事
+- MCP `generate_image` + `import_image_from_url(import_type="sprite")`：拿到 `placeholder_path` 后立即调用本 skill，通常最省事
 - `import_3d_model_from_url`（3D 模型 / 贴图重生成 / 绑骨 / 带动画）：用 `prefab_output_path` 提前放置占位物体，生成完成自动替换
 - `generate_terrain`：常规流程继续走 `apply_terrain_heightmap`，不要绕过

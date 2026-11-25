@@ -99,8 +99,38 @@ namespace TJGenerators.Editor.Tests
             }
             finally
             {
-                var tasks = (System.Collections.IDictionary)typeof(TerrainApplyTaskTracker).GetField("_tasks", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
-                tasks.Remove(id);
+                TerrainApplyTaskTracker.RemoveTask(id);
+            }
+        }
+
+        [Test]
+        public void List_IncludesPendingSpriteSequenceImportWithoutMutatingStatus()
+        {
+            var task = new ImportSpriteSequenceTaskTracker.ImportSpriteSequenceTaskInfo
+            {
+                TaskId = "import_sprite_seq_list_" + Guid.NewGuid().ToString("N"),
+                Status = "importing",
+                SheetUrl = "https://example.com/sheet.png",
+                SheetPath = "Assets/TJGenerators/History/ImportSpriteSequence/list_test.png",
+                StartTime = DateTime.Now,
+                Cols = 4,
+                Rows = 4,
+                Fps = 12,
+                Loop = true,
+                PreserveExistingAlpha = true
+            };
+            ImportSpriteSequenceTaskTracker.RegisterTask(task);
+            try
+            {
+                var result = (JObject)LocalTaskTools.ListLocalTasks(new JObject { ["task_type"] = "sprite_sequence_import", ["limit"] = 1000 });
+                var row = ((JArray)result["tasks"]).Single(t => (string)t["task_id"] == task.TaskId);
+                Assert.AreEqual("importing", (string)row["status"]);
+                Assert.AreEqual("sprite_sequence_import", (string)row["task_type"]);
+                Assert.AreEqual("importing", ImportSpriteSequenceTaskTracker.GetTask(task.TaskId).Status);
+            }
+            finally
+            {
+                StoreAction(typeof(ImportSpriteSequenceTaskTracker), "RemoveTask", task.TaskId);
             }
         }
     }

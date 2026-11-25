@@ -1,184 +1,84 @@
 ---
 name: unity-3d-model-generation
-description: "Generate 3D models in Unity — generation runs on the MCP backend (generate_3d_model + check_task), landing/import/post-processing runs in Unity via the import_3d_model_from_url custom tool. Use this skill whenever the user wants to create a standalone 3D object, prop, or asset — e.g. \"生成一个3D模型\", \"生成一把椅子\", \"create a 3D rock\", \"make a sword model\". Trigger for furniture, weapons, vehicles, buildings, food, props, environment assets, etc. DO NOT use for terrain. For an animated humanoid from scratch: this skill with import add_motion=true + motion_description (same as UI 添加动作). For an existing FBX: the animated-character skill."
+description: "Generate static 3D models, props, or rigged/animated Humanoid 3D characters in Unity. Generation, rigging, and motion run on the MCP backend (generate_image / generate_3d_model / unirig_rig / unimate_motion_generate + check_task); Unity import, texture extraction, Humanoid setup, multi-state AnimatorController, grounding, and Prefab binding run via import_3d_model_from_url. Use whenever the user asks for any 3D object, prop, weapon, vehicle, building, NPC, or animated character — e.g. \"生成3D模型\", \"生成一个带待机、行走、攻击动画的角色\", \"给模型绑骨\", \"create a 3D prop\", \"animated character\". DO NOT use for terrain (use generate_terrain) or 2D sprites."
 ---
 
 > **执行前读取**：[共享执行约定](../../experience/templates/generator-async-pattern.md)。
-> 主 agent 按需委托 `general-purpose`；已在子代理中则直接执行本 skill，不再委托。已提交的阶段从原任务续接。
+> 主 agent 按需委托 `general-purpose`；已在子代理中则直接执行本 skill，不再委托。已提交阶段从原任务续接，不重复生成。
 
 > ⛔ **场景放置规则**
-> - **调用方式**：`activate_skill("unity-place-assets-in-scene")` → 按 §4a Prefab 模板用 `exec_editor_script` 跑 `PrefabUtility.InstantiatePrefab`（**不是** `execute_custom_tool`，**不要** `unity_gameobject` 放 Prefab）。
-> - **第二段提交后立即调一次**放占位 Prefab（`prefab_output_path`）；`query_local_task` 确认完成后**不再调**（占位子节点自动被真实模型替换）。
-> - **主 agent**：报告里的 `prefab_path` 是"已放置"的证据，不是"请你放置"的指示，**不要再调**。
-> - **例外**：用户明确要"换位置 / 改 scale / 再放一个"时才再次调用。详见 [共享执行约定](../../experience/templates/generator-async-pattern.md)。
+> - 调用 `activate_skill("unity-place-assets-in-scene")` → 用 `exec_editor_script` 按 §4a `PrefabUtility.InstantiatePrefab` 放置（不要用 `unity_gameobject` 放 Prefab）。
+> - `static` / `rigged` 导入提交后**立即放置一次占位 Prefab**；`query_local_task` 完成后占位子节点原地替换，**不要再放第二份**。`motion` 模式无占位。
 
-# Generate 3D Model in Unity 🪑（MCP 生成 + Unity 导入）
+# Unity 3D Model & Animated Character（MCP 生成 + Unity 导入）
 
-生成 3D 模型资产。**两段式链路**：
+所有参数与默认引擎以**实时 MCP tool schema** 为准，不覆写默认 `provider` / `tier` / `engine`（除非用户明确指定）。
 
-- **第一段·生成（MCP 后端）**：`generate_3d_model` 提交 → 后台等待 → `check_task` 拿模型 CDN URL。详见 [generators/mcp.md](generators/mcp.md)。
-- **第二段·导入 + 后处理（Unity CustomTool）**：`import_3d_model_from_url` 下载导入 → 材质重映射 / 法线修正 / auto-fit 归一化 / Prefab 绑定 → 本次等待结束后 `query_local_task` 单次拉取结果。
+## 统一线性流程
 
-输出：3D 模型文件（FBX/OBJ/ZIP）+ 自动生成的 Prefab，保存到 `Assets/TJGenerators/History/`。
-`add_motion=true` 时，网格落地后由导入工具内置管线自动 UniRig 绑骨 + HunyuanMotion 动作（与 UI「添加动作」一致）。
-
-## 🚦 执行五步（不要跳读外链）
-
-1. （图生 / 多视图时）`file_upload` 上传参考图 → 拿 `file_url` CDN URL
-2. 调 MCP `generate_3d_model` → 拿 `task_id` → **在当前子代理内等待，不结束任务**（执行返回的 poll 命令后调用 `check_task`）
-3. 下一轮收到生成结果（模型 URL + 可选 rendered_image URL）→ 调 `import_3d_model_from_url` → 拿 `task_id` + `prefab_output_path` → 立即 `activate_skill("unity-place-assets-in-scene")`，按 skill 用 `exec_editor_script` 放占位 Prefab → **在当前子代理内前台等待（每次最多30秒）（`estimated_wait_seconds`，add_motion 时 ~900s）** → **在当前子代理内等待，不结束任务**
-4. 本次等待结束 → `query_local_task` **一次** → 读 `model_path` / `prefab_path`（占位子节点已原地替换为真实模型，**不要再 place**）；仍是 `importing` 则再进行一次前台短等待。**不要干等 Unity 侧 `<bg_task_done>` 推送**（不依赖通知恢复已结束的子代理），按共享约定等待后再查询
-5. 向主 agent 报告（含 provider 选择理由、`task_id`、`prefab_path`、放置位置）
-
-**档位**：第一段生成 3–15 分钟（tier / provider 影响很大；MCP 轮询为 host 管理通道、通知可靠，未收到时对同一 task_id `check_task` 一次即可）；第二段导入静态实测秒级（预估 60s）、add_motion ~5–15 分钟——一律有间隔等待 + 状态查询。
-
-## Provider / 模式选择规则
-
-| 场景 | provider | 子文档 |
-|------|----------|--------|
-| 默认 / 通用 / 快速 / 轻量道具 | **rodin**（MCP 默认，tier 默认 Extreme-Low 最快） | [rodin.md](generators/rodin.md) |
-| 低面数小游戏 / 移动端 / 稳定面数批量 / 多视图（4 视角） | **tripo**（P1 低模优化） | [tripo-p1.md](generators/tripo-p1.md) |
-| 高精度 hero / PBR / 高面数 | rodin 显式 `tier=Gen-2.5-Extreme-High`，或 tripo `model_version=v3.1-20260211`（仅用户明确要求高模） | 对应 provider 文档 |
-| 用户点名混元 | **hunyuan**（必须 `with_fbx=true`） | [mcp.md](generators/mcp.md) |
-
-> **调用前必须 `Read` 对应子文档**：MCP 的 provider 参数集互不通用（rodin 用 `tier` / `texture_mode`；
-> tripo 用 `model_version` / `quad` / `style` / `with_segmentation`），照搬错 provider 的参数会被后端拒绝。
-> 完整 MCP 契约（`file_upload` / 轮询纪律 / 成本确认）见 [mcp.md](generators/mcp.md)。
-
-## When to Use / NOT to Use
-
-适用：家具、武器、载具、建筑、食物、道具、环境资产等独立 3D 物件；以及从零带动画 Humanoid
-（`add_motion=true`，由 `unity-animated-character-generation` 调用本流程）。
-
-不适用：
-- 地形 / 景观 / 峡谷 / 山脉 → `generate_terrain`
-- 已有 FBX 只要绑骨/加动作 → `unity-animated-character-generation`（不要重复生成模型）
-- 2D 精灵 / 图标 → `generate_sprite`
-- 天空盒 → `generate_skybox`
-
-## 工具速查
-
-### 第一段：MCP 生成（详见 [mcp.md](generators/mcp.md)）
-
+```text
+[1. 网格] generate_3d_model（复杂/风格化角色先 generate_image 出设定图再图生3D）
+   ↓ 检视预览图，取带 PBR 贴图的 FBX URL（result.model 或 base_basic_pbr，勿用裸 base）
+[2. 绑骨与动作]（仅角色）先查 list_rodin_rigging_animations：
+   - 能匹配预设：在 unirig_rig(animation_presets=[...]) 中一步完成绑骨与动作（默认 engine=rodin，自带贴图回挂）
+   - 预设库找不到匹配的定制动作：对绑骨 FBX URL 并行调用 unimate_motion_generate（每动作一次）补齐
+   ↓
+[3. 导入] import_3d_model_from_url（static / rigged；若有独立动作 FBX 再追加 motion）→ 放置占位 → query_local_task
+   ↓
+[4. 验收] EditMode 量化校验 + 实拍渲染图检查，通过后再交付
 ```
-generate_3d_model(
-  mode     = "text_to_model" | "image_to_model" | "multiview_to_model",
-  provider = "rodin" | "tripo" | "hunyuan",
-  prompt   = "wooden chair, simple shape, low poly",   # text_to_model 必填
-  # image_to_model: image_url = <file_upload 返回的 file_url>
-  # multiview:     image_urls = "<front>,<left>,<back>,<right>"（front 第一）
-  # 带动画角色: 交给第二段 import 工具的 add_motion，不是 MCP 参数
-  # with_fbx: hunyuan 必须 true（默认 GLB 导入链路不支持）
-)
-```
-
-- 返回 `task_id` + 轮询元数据 → **在当前子代理内等待，不结束任务**，等 host 后台等待 + `check_task` 结果
-- ⛔ 禁止 agent 循环 `check_task`；禁止对同一模型重复提交生成
-
-### 第二段：Unity 导入（CustomTool）
-
-```
-execute_custom_tool(
-  tool_name="import_3d_model_from_url",
-  parameters={
-    "model_url":          "<check_task 返回的 .fbx/.obj/.zip URL>",
-    "rendered_image_url": "<可选，tripo 产物的主贴图>",
-    "provider":           "rodin",            # rodin / tripo / tripo-texture / hunyuan
-    "prompt":             "wooden chair",     # 可选，History 显示
-    "prefab_output_path": "Assets/...",        # 可选，默认自动
-    # 带动画角色（UI「添加动作」同款）:
-    # "add_motion": True, "motion_description": "a walking cycle",
-    "session_id": "<可选>"
-  }
-)
-```
-
-`tool_name` 可选：
-- `import_3d_model_from_url` — 提交导入（立即返回 `task_id` + `prefab_output_path` 占位）
-- `query_local_task` — **主要完成检查**：每次等待结束调用一次；`importing` 未完则继续前台等待后查询同一任务
-- `list_local_tasks` — 列出会话内导入任务
-
-`output_type` 扩展（绑骨/动画链路用，详见 animated-character skill）：
-- `rigged` — 导入绑骨 FBX（MCP `unirig_rig` 产物），需 `source_model_path`（复用源模型贴图）
-- `motion` — 导入动作 FBX（MCP `generate_motion` 产物），需 `rigged_model_path`，可选 `target_prefab_path` + `loop`
-
-## 完成结果字段（query 返回 / 异步通知 payload）
-
-| 字段 | 说明 |
-|---|---|
-| `model_path` | 导入后的模型资产路径 |
-| `prefab_path` | Prefab 路径（== 提交时 `prefab_output_path`） |
-| `output_type` | `static` / `rigged` / `motion` |
-| `provider` | 静态导入的后处理预设 |
-| `add_motion` / `motion_description` | 从零带动画时回显 |
-| `target_prefab_path` / `rigged_model_path` / `controller_path` | motion 模式产物 |
-| `session_id` / `start_time` / `end_time` / `duration_seconds` | 通用 |
-
-## 放入场景
-
-资产类型 **`Prefab`**，路径用 `prefab_output_path`。第二段提交后立即调一次（里面是占位）；
-query 确认完成后**不要**再调——占位子节点自动被真实模型替换。
-
-## 使用示例
-
-### 默认（rodin）—— 简单道具
-
-```
-generate_3d_model(mode="text_to_model", provider="rodin",
-                  prompt="wooden barrel, medieval style")
-# → 在当前子代理内等待，不结束任务 → 生成结果 →
-execute_custom_tool("import_3d_model_from_url", {
-  "model_url": "<fbx_url>", "provider": "rodin",
-  "prompt": "wooden barrel, medieval style"})
-# → place 占位 → 前台等待最多 30 秒 → 在当前子代理内等待，不结束任务 → query 一次
-```
-
-### 图生 3D（任意 provider）
-
-```
-file_upload(file_path="Assets/ConceptArt/chair_concept.png")  # → file_url
-generate_3d_model(mode="image_to_model", provider="tripo",
-                  image_url="<file_url>", prompt="wooden chair, baroque style")
-```
-
-### 从零带动画角色（UI「添加动作」同款）
-
-```
-generate_3d_model(mode="text_to_model", provider="rodin",
-                  prompt="a humanoid mecha robot, full body, standing upright, T-pose")
-# → 在当前子代理内等待，不结束任务 → 生成结果 →
-execute_custom_tool("import_3d_model_from_url", {
-  "model_url": "<fbx_url>", "provider": "rodin",
-  "add_motion": True, "motion_description": "a walking cycle"})
-# 网格落地后自动 UniRig + HunyuanMotion（~12–20 分钟）
-```
-
-## 故障排查
-
-> 通用故障（配置缺失 / 任务卡住 / 状态异常 / 未登录）见 [共享执行约定](../../experience/templates/generator-async-pattern.md)。
-
-### Skill 独有问题
-
-| 问题 | 原因 | 解决 |
-|---|---|---|
-| `check_task` 返回 `.glb` URL | 生成时未开 `with_fbx`（hunyuan 默认 GLB） | 报告格式不兼容；不要传 glb 给导入工具，也不要自动重生成 |
-| 导入工具报 `Unsupported model_url extension` | URL 不是 `.fbx/.obj/.zip` | 同上；或确认拿到的是模型 URL 而非预览图 URL |
-| 第一段提交后想再查一次 | host 后台等待还没结束 | 超过预估时长（3–15 分钟）后对同一 task_id `check_task` 一次 |
-| 第二段导入被 domain reload 打断 | 编译触发重载 | **自动恢复**：任务转 `recovering` 并幂等重跑（URL 永久、下载路径确定性）；再进行一次前台短等待，query 一次，不要重复提交 |
-| query 返回 `failed` | 下载/校验/导入错误 | 看 `error` 字段；URL 永久有效，修复原因后允许用相同 URL 重新 `import_3d_model_from_url`（`force_overwrite=true`） |
-| 一直没收到导入完成通知 | 宿主不消费 Unity 侧推送（已知） | 按共享执行约定处理——标准完成模式就是前台等待 + `query_local_task` 状态查询 |
-| 内容策略拦截（`content_moderation`） | 平台策略不可绕过 | 把拦截原因告知用户；征得同意后才可用 `search_asset_lib` 搜资产库替代 |
-
-### 降级路径
-
-无 TJGenerators custom tool 环境（或用户明确要求提示词化导入）时，用
-[import-recipe.md](generators/import-recipe.md)：`run_shell_command` 下载 → `unity_editor refresh` →
-`exec_editor_script` 跑模板脚本完成导入 + auto-fit（同步链路，无占位无通知）。
 
 ---
 
-**Notes**：
-- 导入模型由 Unity 原生 FBX / OBJ 导入；Prefab 自动绑定模型为子节点并按包围盒 auto-fit 到 ~1m
-- 自动应用 `TuanjieAI` 标签（占位与产物）
-- 第一段消耗 MCP 生成积分（成功完成才扣费）；第二段导入不消耗生成积分
-- 第二段为长任务（含 add_motion 时 5–15 分钟），需 Unity Editor 一直在线；domain reload 自动幂等恢复
+## Step 1：生成 3D 网格（已有本地 FBX 可跳过，先 `file_upload`）
+
+- **普通道具 / 家具 / 建筑**：直接调 `generate_3d_model(mode="text_to_model", prompt=...)`。
+- **风格化 / 特定题材角色（如修仙修士、武将、动漫/奇幻角色）**：为保证脸型、服饰与可绑骨结构一次过关，**先调 `generate_image` 生成全身正面设定图，检视合格后再调 `generate_3d_model(mode="image_to_model", image_url=<图URL>, face_limit=20000)`**（主角/人形角色传 `face_limit=20000` 以保证五官、发饰与手指轮廓清晰，默认 4,000 面仅适合普通道具）：
+  - 画面要求：纯浅灰/白底、全身头脚完整居中、正面站立对称 **A-pose**（双臂自然斜下张开约 40° 远离躯干、五指自然微张、双脚略分开平踩地面）。
+  - **可绑骨服饰设计（自动落实，不教导用户）**：袖口收窄贴合手臂（避免大水袖与躯干粘连）；长袍/道袍采用**前开叉衣摆或及膝战袍 + 清晰分开的长裤与靴子**（避免封闭长筒裙把双腿粘死导致行走/攻击穿模）；双手空手张开便于绑骨（佩剑等武器收于背后或腰间，不握在手中）。
+- **预览门禁**：`generate_3d_model` 完成后先看预览图；若四肢粘连、形体严重畸形或风格偏离，立即重出网格，不在坏网格上浪费绑骨与动作积分。
+- **选带贴图 FBX URL**：优先 `result.model` 或 `result.base_basic_pbr`，禁止取无贴图裸 `base` 或 `.glb`。
+
+## Step 2：绑骨与动作（仅带动画 / 需绑骨角色）
+
+1. **优先查预设一步绑骨 + 动作**：需要动画时，先调一次 `list_rodin_rigging_animations(category="human")`（四足用 `canine` 等）即可一次看到全部可用预设的永久 ID（如 `human_000090`）、名称与描述。找到语义匹配的预设后，直接把 Step 1 的带贴图 FBX CDN URL 与匹配的 `animation_presets` 传给 `unirig_rig(model_url=..., animation_presets=[...], in_place=true)`（含行走/跑步等循环位移预设时传 `in_place=true` 导出原地循环；默认 `engine="rodin"`，自动输出 Mixamo 骨架并回挂原贴图；本地文件先 `file_upload`）。
+2. **预设找不到匹配时走原路线（UniMate 补齐）**：若全部或部分需求动作在预设库中找不到合适匹配（例如特定招式/施法/武器攻击），对 `unirig_rig` 产出的绑骨 FBX URL，按每个缺失动作**并行**调用 `unimate_motion_generate(model_url=<rigged_fbx_url>, prompt=...)`：
+   - 每次只描述**一个**清晰区分的动作，采用英文短句（`"An object ..."`），例如：
+     - Idle: `"An object stands upright calmly in a relaxed idle pose with gentle breathing and slight weight shift."`
+     - Walk: `"An object walks forward steadily at a natural pace with swinging arms."`
+     - Attack: `"An object performs a dynamic forward melee slash attack with the right arm, stepping forward and returning to stance."`
+   - **不要对 Mixamo / Rodin 绑骨角色用 `generate_motion`（混元）**，除非用户点名混元或视频驱动动作（SMPL-H 重定向常导致双臂僵直）。
+
+## Step 3：导入 Unity（`import_3d_model_from_url`）
+
+> ⛔ `add_motion=true` 已废弃，禁止传给 `import_3d_model_from_url`。
+
+- **静态物件**：
+  ```json
+  { "model_url": "<fbx_url>", "output_type": "static", "prefab_output_path": "Assets/Models/<Name>", "prompt": "..." }
+  ```
+- **绑骨角色**（`source_model_path` 可省略，自动提取 `.fbm` 并按 URP/Standard 合成 Metallic+Smoothness PBR 材质、归一化身高到 `1.75m`；若 FBX 内嵌动作会自动建多状态控制器，核对 `controller_states`）：
+  ```json
+  { "model_url": "<rigged_fbx_url>", "output_type": "rigged", "prefab_output_path": "Assets/Characters/<Name>", "target_size": 1.75, "prompt": "..." }
+  ```
+  提交后立即用 `unity-place-assets-in-scene` 实例化占位 Prefab 到场景目标位置，前台等待（≤30s）后 `query_local_task` 一次（未完继续等待查询）直到 `completed`，记下 `model_path` 与 `prefab_path`。
+- **追加独立动作 FBX**（仅当 `unirig_rig` 返回多个独立动作 FBX 或有 UniMate 补充动作时；互不覆盖文件与状态，自动开启 Humanoid `heightFromFeet` 脚底接地，`idle` 自动成为默认状态）：
+  ```json
+  {
+    "model_url": "<motion_fbx_url>",
+    "output_type": "motion",
+    "rigged_model_path": "<model_path>",
+    "target_prefab_path": "<prefab_path>",
+    "clip_name": "idle",
+    "loop": true
+  }
+  ```
+  `loop`: `idle` / `walk` / `run` 用 `true`；单次 `attack` / `cast` / `hit` 用 `false`。`query_local_task` 返回的 `controller_states` 会列出当前控制器全部状态。
+
+## Step 4：强制验收（量化 + 视觉，不通过不交付）
+
+交付前在 EditMode 执行一次 `exec_editor_script` 验收，并用临时 `Camera` + `RenderTexture` 输出 PNG 实看：
+1. **贴图与材质**：所有 `Renderer` 无缺失材质/洋红错误 Shader，主贴图（`_BaseMap` / `mainTexture`）非空且无塑料油光。
+2. **骨架与尺寸接地**（角色）：`Animator.avatar` 为有效 Humanoid，世界身高约 `1.6–2.0m`，静姿与动画采样时脚底均贴合地面（`LeftFoot`/`RightFoot` 世界高度约 `0.05–0.22m`，不浮空、不穿地），正面朝向合理。
+3. **动画状态与真实形变**（带动画角色）：`AnimatorController` 含全部需求状态（如 `idle` / `walk` / `attack`），每段剪辑时长 `> 0.3s`；用 `AnimationMode.SampleAnimationClip`（或采样后置 `smr.forceMatrixRecalculationPerRender = true` 再 `cam.Render()`，避免 EditMode GPU 蒙皮未刷新）采样各状态关键帧，确认肩/臂/腿相对绑定姿态有真实转动（行走/攻击最大关节变化 `> 15°`，且三个动作姿态明显区分）。
+4. **视觉检查**：查看正面全身/近景与 `idle` / `walk` / `attack` 采样帧渲染图；若出现白模、浮空、严重穿模、僵硬不动或背对相机，直接定位修复后再汇报完成。

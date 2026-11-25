@@ -27,6 +27,12 @@ namespace ThreeCup.UI
         [SerializeField] Color tutorialColor = new Color(0.85f, 0.62f, 0.20f, 1f);
         [SerializeField] Color normalColor = new Color(0.24f, 0.38f, 0.56f, 1f);
 
+        [Header("Sprites")]
+        [Tooltip("教学关方块贴图；为空则回退到 tutorialColor 纯色")]
+        [SerializeField] Sprite tutorialSprite;
+        [Tooltip("正式关方块贴图；为空则回退到 normalColor 纯色")]
+        [SerializeField] Sprite normalSprite;
+
         [Header("Paging")]
         [SerializeField] Button prevButton;
         [SerializeField] Button nextButton;
@@ -55,6 +61,7 @@ namespace ThreeCup.UI
 
             capacity = columns * rows;
             SplitLevels();
+            StoreGlobalMapping();
             BuildCells();
             GoToPage(1);
         }
@@ -130,6 +137,12 @@ namespace ThreeCup.UI
 
         void FillCells(List<LevelConfig> list, int start, Color color, bool tutorial)
         {
+            int globalOffset = tutorial ? 0 : tutorials.Count;
+            int unlocked = LevelProgress.UnlockedIndex;
+            var lockedTint = new Color(0.5f, 0.5f, 0.5f, 1f);
+            var lockedLabel = new Color(0.32f, 0.30f, 0.28f, 1f);
+            var normalLabel = new Color(0.227f, 0.184f, 0.149f, 1f);
+
             for (int i = 0; i < cells.Count; i++)
             {
                 var cell = cells[i];
@@ -144,13 +157,48 @@ namespace ThreeCup.UI
                 cell.gameObject.SetActive(true);
                 var config = list[index];
 
+                int globalIndex = globalOffset + index + 1;
+                bool locked = globalIndex > unlocked;
+                bool isProgress = globalIndex == unlocked;
+
                 var img = cell.GetComponent<Image>();
-                if (img != null) img.color = color;
+                if (img != null)
+                {
+                    var sprite = tutorial ? tutorialSprite : normalSprite;
+                    if (sprite != null)
+                    {
+                        img.sprite = sprite;
+                        img.color = locked ? lockedTint : Color.white;
+                    }
+                    else img.color = color;
+                }
+
+                var btn = cell.GetComponent<Button>();
+                if (btn != null) btn.interactable = !locked;
+
+                var hover = cell.GetComponent<CellHoverInk>();
+                if (hover != null)
+                {
+                    hover.SetHoverEnabled(!locked);
+                    hover.SetAlwaysOn(isProgress);
+                }
 
                 var label = cell.GetComponentInChildren<Text>();
                 if (label != null)
-                    label.text = tutorial ? "T" + (index + 1) : (index + 1).ToString();
+                {
+                    label.text = (index + 1).ToString();
+                    label.color = locked ? lockedLabel : normalLabel;
+                }
             }
+        }
+
+        void StoreGlobalMapping()
+        {
+            for (int i = 0; i < tutorials.Count; i++)
+                LevelProgress.StoreGlobalIndex(tutorials[i].LevelId, i + 1);
+
+            for (int i = 0; i < normals.Count; i++)
+                LevelProgress.StoreGlobalIndex(normals[i].LevelId, tutorials.Count + i + 1);
         }
 
         void OnCellClicked(int slot)

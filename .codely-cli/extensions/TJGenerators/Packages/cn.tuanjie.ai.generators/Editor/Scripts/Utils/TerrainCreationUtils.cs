@@ -1,4 +1,4 @@
-﻿#if UNITY_EDITOR
+#if UNITY_EDITOR
 using System;
 using System.IO;
 using UnityEngine;
@@ -105,9 +105,14 @@ namespace TJGenerators.Utils
         /// 从已后处理的高度图 PNG 资产路径创建 TerrainData 并在当前场景中放置 Terrain GameObject。
         /// 返回 (terrainDataPath, terrainGoName)。
         /// </summary>
-        public static (string terrainDataPath, string terrainGoName) CreateTerrainFromHeightmap(
+        /// <param name="worldSizeMeters">
+        /// 较长边的世界长度（米，1 Unity 单位 = 1 米）。&lt;=0 时按像素：1 像素 = 1 米。
+        /// </param>
+        /// <returns>(terrainDataPath, terrainGoName, sizeXYZ) — size 为 TerrainData.size（米）。</returns>
+        public static (string terrainDataPath, string terrainGoName, Vector3 size) CreateTerrainFromHeightmap(
             string heightmapAssetPath,
-            string terrainGoName = "TJGenerators Terrain")
+            string terrainGoName = "TJGenerators Terrain",
+            float worldSizeMeters = 0f)
         {
             if (string.IsNullOrEmpty(heightmapAssetPath))
                 throw new ArgumentException("heightmapAssetPath is empty");
@@ -137,9 +142,25 @@ namespace TJGenerators.Utils
                 if (w <= 0 || h <= 0)
                     throw new InvalidOperationException(TJGeneratorsL10n.L("图片尺寸无效"));
 
-                float terrainWidth = w;
-                float terrainLength = h;
-                float terrainMaxHeight = Mathf.Max(w, h) * 0.3f;
+                const float heightToSide = 0.14f;
+                float terrainWidth;
+                float terrainLength;
+                float terrainMaxHeight;
+                if (worldSizeMeters > 1f)
+                {
+                    // 较长边 = 用户指定米数；短边按像素宽高比缩放。高度仍为较长边的 14%。
+                    float longPx = Mathf.Max(w, h);
+                    float metersPerPixel = worldSizeMeters / longPx;
+                    terrainWidth = w * metersPerPixel;
+                    terrainLength = h * metersPerPixel;
+                    terrainMaxHeight = worldSizeMeters * heightToSide;
+                }
+                else
+                {
+                    terrainWidth = w;
+                    terrainLength = h;
+                    terrainMaxHeight = Mathf.Max(w, h) * heightToSide;
+                }
 
                 int approxRes = Mathf.ClosestPowerOfTwo(Mathf.Max(w, h)) + 1;
                 int heightmapResolution = SnapToAllowedHeightmapResolution(approxRes);
@@ -174,9 +195,12 @@ namespace TJGenerators.Utils
                 Selection.activeGameObject = terrainGo;
                 EditorGUIUtility.PingObject(terrainGo);
 
-                TJLog.Log($"{LogTag} 已创建地形: {terrainGo.name}, TerrainData: {terrainDataPath}");
+                var size = terrainData.size;
+                TJLog.Log($"{LogTag} 已创建地形: {terrainGo.name}, TerrainData: {terrainDataPath}, " +
+                          $"size={size.x:F1}×{size.z:F1}m height={size.y:F1}m " +
+                          $"(world_size_meters={(worldSizeMeters > 1f ? worldSizeMeters.ToString("F0") : "default 1px=1m")}, png={w}×{h})");
 
-                return (terrainDataPath, terrainGo.name);
+                return (terrainDataPath, terrainGo.name, size);
             }
             finally
             {
@@ -212,7 +236,8 @@ namespace TJGenerators.Utils
             PostProcessAndCreateTerrain(
                 string originalHeightmapAssetPath,
                 TerrainHeightmapPostProcessOptions options,
-                string terrainGoName = "TJGenerators Terrain")
+                string terrainGoName = "TJGenerators Terrain",
+                float worldSizeMeters = 0f)
         {
             if (string.IsNullOrEmpty(originalHeightmapAssetPath))
                 return (null, null, null, TJGeneratorsL10n.L("originalHeightmapAssetPath 为空"));
@@ -247,7 +272,8 @@ namespace TJGenerators.Utils
 
             try
             {
-                var (terrainDataPath, goName) = CreateTerrainFromHeightmap(processedAssetPath, terrainGoName);
+                var (terrainDataPath, goName, _) = CreateTerrainFromHeightmap(
+                    processedAssetPath, terrainGoName, worldSizeMeters);
                 return (terrainDataPath, goName, processedAssetPath, null);
             }
             catch (Exception e)

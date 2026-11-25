@@ -59,5 +59,21 @@ namespace TJGenerators.Editor.Tests
             // 中文 prompt 原样保留（≤24 字符）
             Assert.AreEqual("一把木椅子", Import3DModelFromUrlTool.BuildSafeBaseName("一把木椅子"));
         }
+
+        [Test]
+        public void Import_BuildMotionFileSuffix_UsesClipNameOrDeterministicUrlHash()
+        {
+            Assert.AreEqual("idle",
+                Import3DModelFromUrlTool.BuildMotionFileSuffix("idle", "https://cdn.example.com/a.fbx"));
+            Assert.AreEqual("sword_attack",
+                Import3DModelFromUrlTool.BuildMotionFileSuffix("Sword Attack!", "https://cdn.example.com/b.fbx"));
+
+            string h1 = Import3DModelFromUrlTool.BuildMotionFileSuffix(null, "https://cdn.example.com/clip1.fbx");
+            string h2 = Import3DModelFromUrlTool.BuildMotionFileSuffix("", "https://cdn.example.com/clip1.fbx");
+            string h3 = Import3DModelFromUrlTool.BuildMotionFileSuffix(null, "https://cdn.example.com/clip2.fbx");
+            Assert.AreEqual(8, h1.Length);
+            Assert.AreEqual(h1, h2);
+            Assert.AreNotEqual(h1, h3);
+        }
     }
 }

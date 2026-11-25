@@ -332,7 +332,7 @@ namespace TJGenerators
                     request.downloadHandler = new DownloadHandlerBuffer();
                     request.SetRequestHeader("Content-Type", "application/json");
                     request.SetRequestHeader("Authorization", $"Bearer {authToken}");
-                    request.SetRequestHeader("orgId", UnityConnectSession.instance.GetOrgId());
+                    request.SetRequestHeader("orgId", UnityConnectSession.instance.GetOrgId(authToken));
                     request.SetRequestHeader("source", "codely");
                     request.SetRequestHeader(GenerationRequestOrigin.HeaderName, GenerationRequestOrigin.Ui);
                     var pkgVer = GenerationRequestOrigin.GetPackageVersion();

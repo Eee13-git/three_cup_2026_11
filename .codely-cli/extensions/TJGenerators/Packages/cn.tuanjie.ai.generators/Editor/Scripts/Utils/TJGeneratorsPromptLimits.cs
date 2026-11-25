@@ -16,6 +16,8 @@ namespace TJGenerators.Utils
             {
                 // fal.go backend binding max
                 case "frontier-game-design": return 4000;
+                case "frontier_flare":       return 32000;
+                case "frontier_sunburst":    return 32000;
                 case "frontier-effect":      return 2000;
                 case "sonilo-sfx":           return 500;
                 case "sonilo-music":         return 2000;

@@ -145,7 +145,7 @@ namespace TJGenerators.Pipeline
         {
             string token = UnityConnectSession.instance.GetAccessToken();
             uwr.SetRequestHeader("Authorization", $"Bearer {token}");
-            uwr.SetRequestHeader("orgId", UnityConnectSession.instance.GetOrgId());
+            uwr.SetRequestHeader("orgId", UnityConnectSession.instance.GetOrgId(token));
             uwr.SetRequestHeader("source", "codely");
             uwr.SetRequestHeader(
                 GenerationRequestOrigin.HeaderName,

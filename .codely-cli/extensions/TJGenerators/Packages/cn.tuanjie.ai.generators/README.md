@@ -6,6 +6,16 @@ Codely 扩展通过 skills 指导执行，耗时任务按需委托内置 `genera
 
 本地任务统一通过 `query_local_task` / `list_local_tasks` 查询，`list_session_assets` 保留会话资产清单；MCP 生成状态由 `check_task` 查询。天空盒使用 MCP `generate_skybox` 在线生成，复用 `import_image_from_url(import_type="skybox")` 导入 Cubemap 和材质。
 
+## Generators Surface
+
+在支持 MCP App 的 Cowork 2.2.0 及以上版本中，从会话的应用入口打开 **Generators Surface**。默认查看本次对话的产物，也可切换到当前工作区或登录账号的全部历史。选中产物可预览和打开文件，有已记录的任务关系时可进入生成流程详情。同一对话有至少两个生成任务完成后，Agent 根据 Generator 的完成提示打开对应页面。后台任务在原对话续接时执行这一步。
+
+运行 `node tools/build-bundle.mjs --archive` 生成 `build/TJGenerators.zip`。同一个扩展包包含 Generators Surface 和 Unity 集成。Surface 通过现有 Generator MCP 服务加载页面、历史和流程。
+
+用户级安装可让本机的 Cowork 工作区打开 Surface。需要导入和后处理的 Unity、团结项目，可在项目级安装或升级同一个包，安装器会将 `Packages/cn.tuanjie.ai.generators` 加入项目依赖。已有项目级副本时，该项目优先使用项目级版本。
+
+工作区历史按 Cowork 提供的项目根目录标识分组。同名项目各自展示；旧任务仍可从本次对话或账号全部历史查看。
+
 ## 功能特性
 
 ### 🎮 3D 模型生成
@@ -26,7 +36,7 @@ Codely 扩展通过 skills 指导执行，耗时任务按需委托内置 `genera
 | **图片切割** | 对大图进行传统 CV 自动区域检测，预览并批量导出独立精灵（`AI/工具/图片切割`） |
 | **图片分层** | 将一张输入图 AI 拆分为多张独立 RGBA 图层 PNG（Qwen 或 Seedream Pro）；编辑器图片窗口保留；Agent 链路：MCP `generate_image_layers` + CustomTool `import_image_from_url` |
 | **ESRGAN 图片放大** | Real-ESRGAN 超分，支持 1x–8x、多种模型与可选人脸增强；Agent 链路：MCP `upscale_image` + CustomTool `import_image_from_url` |
-| **Game UI Kit** | 默认两步工作流（CustomTool `generate_game_ui_kit`）：Seedream Pro 文生游戏 UI 截图（2848×1600）→ 图层拆分为底图 + 最多 16 层透明 PNG；`frontier` 品红底抠图拼版为旧路径；图层合并时可用 `slice_image` 兜底切割 |
+| **Game UI Kit** | MCP `generate_image` 生图 → MCP `generate_image_layers` 拆层 → Unity `import_image_from_url` 以 Sprite 导入，需要可复用控件时按[切图经验](extension/skills/game_ui_slicing/README.md)测量、切片和运行布局 QA；合并元素可用 `slice_image` 切割。 |
 
 ### 🌌 天空盒生成
 
@@ -36,7 +46,7 @@ Codely 扩展通过 skills 指导执行，耗时任务按需委托内置 `genera
 
 ### 🖼️ 图片生成
 
-> **Agent（Codely 扩展）链路说明**：图片生成 / 图片分层 / 图片放大的提交与轮询已迁移到后端 MCP（`generate_image` / `generate_image_layers` / `upscale_image` + `check_task`），Unity 侧通过 CustomTool `import_image_from_url`（单图 GUID 稳定占位 / 多图图层模式，含域重载幂等恢复）完成下载导入与后处理。2D 序列帧走 MCP `generate_sprite_animation` / 八向 `generate_eight_dir_sprite`；Unity 编辑器仍保留精灵表序列帧窗口。`generate_game_ui_kit` 仍走 Unity 内置链路。
+> **Agent（Codely 扩展）链路说明**：图片生成 / 图片分层 / 图片放大的提交与轮询已迁移到后端 MCP（`generate_image` / `generate_image_layers` / `upscale_image` + `check_task`），Unity 侧通过 CustomTool `import_image_from_url`（单图 GUID 稳定占位 / 多图图层模式，含域重载幂等恢复）完成下载导入与后处理。2D 序列帧走 MCP `generate_sprite_animation` / 八向 `generate_eight_dir_sprite`；Unity 用 `import_sprite_sequence_from_url` 将 4×4 动作图导入为 Sprite 帧和 AnimationClip。静态 Sprite 共用 MCP 生图，Unity 导入时传 `import_type="sprite"`。
 
 | 生成器 | 功能 | 特点 |
 |--------|------|------|
@@ -66,14 +76,14 @@ Codely 扩展通过 skills 指导执行，耗时任务按需委托内置 `genera
 
 ### 🎵 音频生成
 
-> **Agent（Codely 扩展）链路说明**：音频生成（BGM / 音效 / TTS）与声音克隆的提交与轮询已迁移到后端 MCP（`generate_music` / `generate_sound_effect` / `generate_tts` / `voice_clone` + `check_task`），Unity 侧通过 CustomTool `import_audio_from_url`（静音 WAV 占位、AudioSource 自动重绑、BGM 场景自动创建 BGMPlayer，含域重载幂等恢复）完成下载导入；注意 `output_format` 只选 `wav`/`mp3`（.aac/.flac 不可导入）。声音克隆无落盘段（返回 `custom_voice_id` 字符串，交给 `generate_tts` 的 `voice_id`）。编辑器窗口不受影响。
+> **Agent（Codely 扩展）链路说明**：BGM / 音效 / TTS / 声音克隆分别由 skill `unity-audio-clip-generation` / `unity-sound-effect-generation` / `unity-tts-generation` / `unity-voice-clone` 执行。生成提交与轮询走 MCP（`generate_music` / `generate_sound_effect` / `generate_tts` / `voice_clone` + `check_task`）；下载原件后用 `extension/skills/game_audio_production/` 的 `audio_finish.py` 整理（SFX：oneshot；BGM：loop 或 normalize；TTS：normalize），再 `file_upload` 成品 WAV，经 CustomTool `import_audio_from_url` 导入（静音 WAV 占位、AudioSource 重绑、BGM 可自动创建 BGMPlayer）。用户要求原样或快速试听时可跳过整理，此时仅接受 wav/mp3 CDN 直 import。声音克隆只返回 `custom_voice_id`，合成与落盘由 TTS skill 完成。整理依赖 Python、NumPy、ffmpeg。编辑器窗口不受影响。
 
 | 生成器 | 功能 |
 |--------|------|
-| **Sonilo 音乐生成** | 文生背景音乐，支持 1-180 秒时长，WAV/MP3 输出 |
-| **Sonilo 音效生成** | 文生音效（SFX），支持中英文，1-180 秒，WAV/MP3 输出 |
-| **MiniMax 语音合成** | 文生语音（TTS），支持预设语音角色与自定义 Voice ID；省略 `voice_id` 时使用内置默认音色 |
-| **声音克隆** | 从音频样本克隆音色（Agent 链路：MCP `voice_clone`），返回 `custom_voice_id` 可交给 TTS 使用 |
+| **Sonilo 音乐生成** | 文生背景音乐；Agent：生成 → loop/响度整理 → 导入 |
+| **Sonilo 音效生成** | 文生音效（SFX）；Agent：生成 → oneshot 整理 → 导入 |
+| **MiniMax 语音合成** | 文生语音（TTS）；Agent：生成 → LUFS 整理 → 导入 |
+| **声音克隆** | MCP `voice_clone` → `custom_voice_id`；合成落盘走 TTS skill |
 
 ### 🎬 视频生成
 

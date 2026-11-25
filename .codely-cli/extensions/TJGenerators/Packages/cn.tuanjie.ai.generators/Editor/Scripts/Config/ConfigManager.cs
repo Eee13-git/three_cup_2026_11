@@ -80,9 +80,10 @@ namespace TJGenerators.Config
             var raw = GetRawConfig();
             var list = GetListForType(raw, type);
             if (list == null && (type == ConfigType.Image || type == ConfigType.ReferenceImage || type == ConfigType.Video))
-                return new List<GeneratorConfig>();
+                return MergeLocalOnlyGenerators(type, new List<GeneratorConfig>(), list);
             var enabled = list?.FindAll(g => g.enabled);
-            if (enabled != null && enabled.Count > 0) return enabled;
+            if (enabled != null && (enabled.Count > 0 || type == ConfigType.Image))
+                return MergeLocalOnlyGenerators(type, enabled, list);
             list = GetListForType(LoadDefaultConfig(), type);
             return list?.FindAll(g => g.enabled) ?? new List<GeneratorConfig>();
         }
@@ -91,7 +92,34 @@ namespace TJGenerators.Config
         /// 获取指定生成器的配置（按类型取对应列表）
         /// </summary>
         public static GeneratorConfig GetGeneratorConfig(ConfigType type, string generatorId)
-            => GetListForType(GetRawConfig(), type)?.Find(g => g.id == generatorId);
+        {
+            var found = GetListForType(GetRawConfig(), type)?.Find(g => g.id == generatorId);
+            if (found != null)
+                return found;
+            return GetListForType(LoadDefaultConfig(), type)?.Find(g => g.id == generatorId);
+        }
+
+        /// <summary>
+        /// 远程 config/generators 会整表覆盖本地包配置。本地多出来的图片模型（全能耀斑、全能日辉）补进列表，便于本机对比测试。
+        /// </summary>
+        private static List<GeneratorConfig> MergeLocalOnlyGenerators(ConfigType type, List<GeneratorConfig> runtime, List<GeneratorConfig> configured)
+        {
+            if (type != ConfigType.Image || runtime == null)
+                return runtime;
+            var local = GetListForType(LoadDefaultConfig(), type)?.FindAll(g => g.enabled);
+            if (local == null || local.Count == 0)
+                return runtime;
+            var merged = new List<GeneratorConfig>(runtime);
+            foreach (var g in local)
+            {
+                if (g.id != "frontier_flare" && g.id != "frontier_sunburst")
+                    continue;
+                if (configured != null && configured.Exists(x => x.id == g.id))
+                    continue;
+                merged.Add(g);
+            }
+            return merged;
+        }
 
         /// <summary>
         /// 从包内 Editor/Config/GeneratorConfig.json 读取生成器配置（不受 Library 缓存影响）。
@@ -263,7 +291,7 @@ namespace TJGenerators.Config
                 string token = UnityConnectSession.instance.GetAccessToken();
                 if (!string.IsNullOrEmpty(token))
                     request.SetRequestHeader("Authorization", $"Bearer {token}");
-                request.SetRequestHeader("orgId", UnityConnectSession.instance.GetOrgId());
+                request.SetRequestHeader("orgId", UnityConnectSession.instance.GetOrgId(token));
 
                 yield return request.SendWebRequest();
 

@@ -24,6 +24,26 @@ namespace TJGenerators.Utils
             if (!IsPng(imageData))
                 return imageData;
 
+            return ReencodeLoadedImageAsPng(imageData);
+        }
+
+        /// <summary>
+        /// 将任意 Unity 可解码的图片字节（JPEG/PNG/WebP 等）转为 PNG。
+        /// 用于：用户/工具请求了 outputFormat=png，但后端仍返回 JPEG 的情况（如 frontier-effect）。
+        /// </summary>
+        public static byte[] ConvertToPngBytes(byte[] imageData)
+        {
+            if (imageData == null || imageData.Length < 8)
+                return imageData;
+
+            if (IsPng(imageData))
+                return EnsureRgba32PngBytes(imageData);
+
+            return ReencodeLoadedImageAsPng(imageData);
+        }
+
+        private static byte[] ReencodeLoadedImageAsPng(byte[] imageData)
+        {
             var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             try
             {
@@ -178,6 +198,8 @@ namespace TJGenerators.Utils
 
             return fileNameWithoutExt[prefix.Length] == ' ';
         }
+
+        public static bool IsPngBytes(byte[] data) => IsPng(data);
 
         private static bool IsPng(byte[] data)
         {

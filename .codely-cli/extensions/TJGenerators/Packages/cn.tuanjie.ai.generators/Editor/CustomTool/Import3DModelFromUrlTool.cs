@@ -52,6 +52,9 @@ namespace UnityTcp.Editor.Tools
             public bool   addMotion;
             public string motionDescription;
             public bool   loopTime;
+            public string clipName;
+            public bool   replaceController;
+            public float  targetSize;
 
             public string errorMessage;
             public long   startTimeTicks;
@@ -80,6 +83,9 @@ namespace UnityTcp.Editor.Tools
             public bool   AddMotion        { get; set; }
             public string MotionDescription { get; set; }
             public bool   LoopTime         { get; set; } = true;
+            public string ClipName         { get; set; }
+            public bool   ReplaceController { get; set; }
+            public float  TargetSize       { get; set; }
 
             public string ErrorMessage    { get; set; }
             public DateTime StartTime     { get; set; }
@@ -114,6 +120,9 @@ namespace UnityTcp.Editor.Tools
             addMotion          = info.AddMotion,
             motionDescription  = info.MotionDescription ?? "",
             loopTime           = info.LoopTime,
+            clipName           = info.ClipName ?? "",
+            replaceController  = info.ReplaceController,
+            targetSize         = info.TargetSize,
             errorMessage       = info.ErrorMessage ?? "",
             startTimeTicks     = info.StartTime.Ticks,
             endTimeTicks       = info.EndTime?.Ticks ?? 0
@@ -139,6 +148,9 @@ namespace UnityTcp.Editor.Tools
             AddMotion          = p.addMotion,
             MotionDescription  = p.motionDescription,
             LoopTime           = p.loopTime,
+            ClipName           = p.clipName,
+            ReplaceController  = p.replaceController,
+            TargetSize         = p.targetSize,
             ErrorMessage       = p.errorMessage,
             StartTime          = new DateTime(p.startTimeTicks),
             EndTime            = p.endTimeTicks > 0 ? (DateTime?)new DateTime(p.endTimeTicks) : null
@@ -196,8 +208,11 @@ namespace UnityTcp.Editor.Tools
     /// Deterministic model download path (md5 of URL) so domain-reload re-runs
     /// overwrite in place instead of allocating new History slots.
     /// </summary>
-    internal class ImportModelPipelineHost : HeadlessPipelineHostBase, IModelDownloadPathProvider
+    internal class ImportModelPipelineHost : HeadlessPipelineHostBase, IModelDownloadPathProvider, IModelImportOptionsProvider
     {
+        internal const float DefaultRiggedTargetHeight = 1.75f;
+        internal const float DefaultStaticTargetSize = 1.0f;
+
         private readonly ImportModelTaskTracker.ImportTaskInfo _task;
 
         internal ImportModelPipelineHost(ImportModelTaskTracker.ImportTaskInfo task)
@@ -218,6 +233,18 @@ namespace UnityTcp.Editor.Tools
         private bool IsMotion =>
             string.Equals(_task?.OutputType, "motion", StringComparison.OrdinalIgnoreCase);
 
+        private bool IsRigged =>
+            string.Equals(_task?.OutputType, "rigged", StringComparison.OrdinalIgnoreCase);
+
+        public bool IsMotionOnlyImport => IsMotion;
+
+        public float TargetModelSize =>
+            _task != null && _task.TargetSize > 0f
+                ? _task.TargetSize
+                : (IsRigged ? DefaultRiggedTargetHeight : DefaultStaticTargetSize);
+
+        public bool GroundModelToOriginY => IsRigged;
+
         public string GetModelDownloadPath(string resolvedSavePath)
         {
             if (_task == null || string.IsNullOrEmpty(_task.ModelUrl)) return null;
@@ -228,13 +255,14 @@ namespace UnityTcp.Editor.Tools
 
             if (IsMotion)
             {
-                // 与 generate_model_motion 产线一致：动作 FBX 落在绑骨模型同目录
+                // 动作 FBX 落在绑骨模型同目录，并按 clip_name（或 URL 短哈希）区分文件，多段动作不互相覆盖
                 if (string.IsNullOrEmpty(_task.RiggedModelPath)) return null;
                 string dir = Path.GetDirectoryName(_task.RiggedModelPath)?.Replace("\\", "/") ?? "";
                 string baseName = Path.GetFileNameWithoutExtension(_task.RiggedModelPath);
                 if (baseName.EndsWith("_rigged", StringComparison.OrdinalIgnoreCase))
                     baseName = baseName.Substring(0, baseName.Length - "_rigged".Length);
-                return Path.Combine(dir, baseName + "_motion" + ext).Replace("\\", "/");
+                string suffix = Import3DModelFromUrlTool.BuildMotionFileSuffix(_task.ClipName, _task.ModelUrl);
+                return Path.Combine(dir, baseName + "_motion_" + suffix + ext).Replace("\\", "/");
             }
 
             // 静态/绑骨导入：按 Prefab 名分组 + URL 哈希文件名，域重载重跑原位覆盖
@@ -256,32 +284,45 @@ namespace UnityTcp.Editor.Tools
 
             if (IsMotion)
             {
-                // 1) 配置动作 FBX 导入（Humanoid 动画剪辑，可循环）
-                RiggedModelPostProcess.SetupAnimationImport(modelPath, _task.LoopTime);
+                // 1) 配置动作 FBX 导入（Humanoid 动画剪辑，按 clip_name 命名并设置循环标志）
+                RiggedModelPostProcess.SetupAnimationImport(modelPath, _task.LoopTime, _task.ClipName);
 
-                // 2) 重新导入使动画剪辑可提取，控制器与剪辑使用相同的循环设置
+                // 2) 重新导入使动画剪辑可提取，并将该动作增量追加/更新到绑骨角色共享的 AnimatorController
                 PathUtils.SafeRefresh();
                 if (!string.IsNullOrEmpty(_task.RiggedModelPath))
                 {
                     string riggedDir = Path.GetDirectoryName(_task.RiggedModelPath)?.Replace("\\", "/") ?? "";
                     string riggedBase = Path.GetFileNameWithoutExtension(_task.RiggedModelPath);
-                    controllerPath = RiggedModelPostProcess.CreateSingleClipLoopAnimatorControllerFromMotionClip(
-                        riggedDir, riggedBase, modelPath, _task.LoopTime) ?? "";
+                    controllerPath = RiggedModelPostProcess.AddOrUpdateMotionClipInAnimatorController(
+                        riggedDir,
+                        riggedBase,
+                        modelPath,
+                        _task.ClipName,
+                        _task.LoopTime,
+                        _task.ReplaceController) ?? "";
 
                     // 3) 把控制器 + Avatar 绑回目标 Prefab
                     if (!string.IsNullOrEmpty(_task.TargetPrefabPath))
-                        ReplaceAnimatedCharacterModelTool.AssignAnimatorControllerIfMissing(
+                        Import3DModelFromUrlTool.AssignAnimatorControllerIfMissing(
                             _task.TargetPrefabPath, _task.RiggedModelPath);
                 }
             }
-            else if (string.Equals(_task.OutputType, "rigged", StringComparison.OrdinalIgnoreCase))
+            else if (IsRigged)
             {
-                // 绑骨 FBX：DownloadModel 的 rigged 分支已完成 Humanoid 导入收尾，
-                // 这里补上 Prefab 的 Animator/Avatar 绑定
+                // 绑骨 FBX：DownloadModel 的 rigged 分支已完成 Humanoid 导入收尾；
+                // 若 FBX 内嵌动画已自动生成控制器，一并记录并绑定到 Prefab
+                string riggedDir = Path.GetDirectoryName(modelPath)?.Replace("\\", "/") ?? "";
+                string riggedBase = Path.GetFileNameWithoutExtension(modelPath);
+                string candidateCtrl = Path.Combine(riggedDir, riggedBase + "_Controller.controller").Replace("\\", "/");
+                if (AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(candidateCtrl) != null)
+                    controllerPath = candidateCtrl;
+
                 if (!string.IsNullOrEmpty(_task.PrefabPath))
-                    ReplaceAnimatedCharacterModelTool.AssignAnimatorControllerIfMissing(
+                    Import3DModelFromUrlTool.AssignAnimatorControllerIfMissing(
                         _task.PrefabPath, modelPath);
             }
+
+            string[] controllerStates = RiggedModelPostProcess.GetControllerStateNames(controllerPath);
 
             ImportModelTaskTracker.ApplyTaskUpdate(_task, t =>
             {
@@ -310,8 +351,8 @@ namespace UnityTcp.Editor.Tools
                     ["rigged_model_path"] = _task.RiggedModelPath ?? "",
                     ["source_model_path"] = _task.SourceModelPath ?? "",
                     ["controller_path"]  = controllerPath ?? "",
-                    ["add_motion"]       = _task.AddMotion,
-                    ["motion_description"] = _task.MotionDescription ?? "",
+                    ["controller_states"] = new JArray(controllerStates),
+                    ["clip_name"]        = _task.ClipName ?? "",
                     ["progress"]         = 100,
                     ["start_time"]       = _task.StartTime.ToString("yyyy-MM-dd HH:mm:ss"),
                     ["end_time"]         = _task.EndTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "",
@@ -367,29 +408,21 @@ namespace UnityTcp.Editor.Tools
         private const string ToolName = "import_3d_model_from_url";
 
         [ExecuteCustomTool.CustomTool(ToolName,
-            "Import an already-generated 3D model from a permanent CDN URL into Unity, with the full TJGenerators " +
-            "post-processing chain (texture extraction, material remap, normal-map fix, default white material fallback, " +
-            "mesh validation, auto-fit normalization to ~1m, placeholder replacement, History record + TuanjieAI/Session labels). " +
-            "The URL comes from the MCP backend generation flow (generate_3d_model -> check_task -> model URL), NOT from a local path. " +
-            "Supports .fbx / .obj / .zip model URLs and an optional rendered_image_url (applied as main texture, Tripo outputs usually have one). " +
+            "Import an already-generated 3D model or animation clip from a permanent CDN URL into Unity, with the full TJGenerators " +
+            "post-processing chain (texture extraction, material remap, normal-map fix, mesh validation, auto-fit normalization, " +
+            "placeholder replacement, History record + TuanjieAI/Session labels). " +
+            "The URL comes from the MCP backend (generate_3d_model / unirig_rig / unimate_motion_generate -> check_task -> FBX/OBJ/ZIP URL), NOT from a local path. " +
             "Modes via output_type: " +
-            "'static' (default) — plain model import bound to a Cube placeholder prefab; " +
-            "'rigged' — import a Humanoid rigged FBX (e.g. from MCP unirig_rig); pass source_model_path to restore textures from the source model; " +
-            "'motion' — import a motion FBX (e.g. from MCP generate_motion); pass rigged_model_path (required) and optional target_prefab_path; " +
-            "an AnimatorController is created and assigned automatically; no placeholder prefab is created for motion. " +
-            "static also supports add_motion=true + motion_description (same as UI 添加动作): after the mesh lands, the pipeline " +
-            "runs UniRig + HunyuanMotion automatically and the prefab ends up rigged + animated in ONE call (~5-15 min). " +
-            "Key parameters: model_url (required), rendered_image_url, provider (rodin|tripo|tripo-texture|hunyuan — selects the " +
-            "post-processing preset; default rodin; static only), output_type (static|rigged|motion), prefab_output_path, force_overwrite, " +
-            "add_motion, motion_description, source_model_path (rigged), rigged_model_path + target_prefab_path + loop (motion), " +
-            "prompt (optional display text for History), session_id. " +
-            "Returns immediately with task_id + prefab_output_path (a Cube/Capsule placeholder). " +
-            "Instantiate the placeholder prefab right away. " +
-            "RELIABLE COMPLETION FLOW (the Unity-side <bg_task_done> push may never reach the session): after instantiating, " +
-            "run a foreground shell wait of at most 30 seconds in this subagent (e.g. 'Start-Sleep -Seconds 30' / 'sleep 30'), " +
-            "keep the subagent active; after the wait returns, call query_local_task ONCE with task_id to fetch the result; " +
-            "if it still reports 'importing', run another bounded foreground wait and query again. " +
-            "Do NOT loop query_local_task within one wake-up, and do NOT wait indefinitely for a Unity-side notification. " +
+            "'static' (default) — plain static 3D model bound to a Cube placeholder prefab (auto-fit ~1m or target_size); " +
+            "'rigged' — import a Humanoid rigged FBX (e.g. from MCP unirig_rig) bound to a grounded Capsule placeholder prefab (auto-fit ~1.75m height or target_size, feet at y=0). " +
+            "source_model_path is optional (only needed to copy textures if the rigged FBX lacks embedded textures). Embedded animations in the rigged FBX are preserved automatically into a multi-state AnimatorController; " +
+            "'motion' — import an animation clip FBX (e.g. from MCP unimate_motion_generate) onto an existing rigged character. " +
+            "Pass rigged_model_path (required), target_prefab_path, clip_name (e.g. 'idle', 'walk', 'attack'), and loop (default true; set false for one-shot attacks). " +
+            "Each clip saves to its own file and APPENDS/UPDATES a named state in the shared AnimatorController without deleting existing clips (idle is promoted to default state automatically; set replace_controller=true only to wipe existing states). " +
+            "Key parameters: model_url (required), rendered_image_url, provider (rodin|tripo|tripo-texture|hunyuan; static only), output_type (static|rigged|motion), " +
+            "prefab_output_path, target_size (meters, optional), force_overwrite, source_model_path (optional, rigged), " +
+            "rigged_model_path + target_prefab_path + clip_name + loop + replace_controller (motion), prompt, session_id. " +
+            "Returns immediately with task_id + prefab_output_path (for static/rigged). Instantiate the placeholder prefab right away, wait <=30s in foreground shell, then call query_local_task ONCE with task_id (repeat bounded wait if still 'importing'). " +
             "Domain reload safe: in-flight imports are automatically re-launched (URL is permanent, import is idempotent).")]
         public static object ImportModelFromUrl(JObject parameters)
         {
@@ -409,6 +442,7 @@ namespace UnityTcp.Editor.Tools
                 string prefabOutputPath  = parameters["prefab_output_path"]?.ToString();
                 bool   forceOverwrite    = parameters["force_overwrite"]?.ToObject<bool>() ?? false;
                 string sessionId         = parameters["session_id"]?.ToString() ?? "";
+                float  targetSize        = parameters["target_size"]?.ToObject<float>() ?? 0f;
                 GenerationRequestOrigin.SetWorkspaceName(parameters["workspace_name"]?.ToString());
 
                 if (string.IsNullOrEmpty(outputType))
@@ -436,19 +470,17 @@ namespace UnityTcp.Editor.Tools
                                 "If the URL is .glb, regenerate via MCP with with_fbx=true.");
 
                 bool addMotion = parameters["add_motion"]?.ToObject<bool>() ?? false;
-                string motionDescription = parameters["motion_description"]?.ToString();
-                if (addMotion && outputType != "static")
-                    return Fail("add_motion is only supported with output_type=static (the mesh is rigged after import).");
-                if (addMotion && string.IsNullOrWhiteSpace(motionDescription))
-                    return Fail("add_motion is true but 'motion_description' is required (same as UI 添加动作). Example: 'a walking cycle'.");
+                if (addMotion)
+                    return Fail("add_motion on import_3d_model_from_url is deprecated. " +
+                                "Run rigging and motion generation on MCP (unirig_rig -> unimate_motion_generate or animation_presets), " +
+                                "then import via output_type='rigged' and output_type='motion'.");
 
                 if (string.IsNullOrEmpty(provider))
                     provider = "rodin";
 
                 string sourceModelPath = parameters["source_model_path"]?.ToString();
-                if (outputType == "rigged" && string.IsNullOrEmpty(sourceModelPath))
-                    return Fail("'source_model_path' is required for output_type=rigged (used to restore textures onto the rigged FBX).");
-                if (outputType == "rigged" && !File.Exists(PathUtils.ToAbsoluteAssetPath(sourceModelPath)))
+                if (outputType == "rigged" && !string.IsNullOrEmpty(sourceModelPath) &&
+                    !File.Exists(PathUtils.ToAbsoluteAssetPath(sourceModelPath)))
                     return Fail($"Source model not found: {sourceModelPath}");
 
                 string riggedModelPath = parameters["rigged_model_path"]?.ToString();
@@ -458,7 +490,9 @@ namespace UnityTcp.Editor.Tools
                     return Fail($"Rigged model not found: {riggedModelPath}");
 
                 string targetPrefabPath = parameters["target_prefab_path"]?.ToString();
+                string clipName = parameters["clip_name"]?.ToString()?.Trim() ?? "";
                 bool loopTime = parameters["loop"]?.ToObject<bool>() ?? true;
+                bool replaceController = parameters["replace_controller"]?.ToObject<bool>() ?? false;
 
                 string providerConfigId = ResolveProviderConfigId(outputType == "static" ? provider : null);
                 if (outputType == "static" && providerConfigId == null)
@@ -475,9 +509,9 @@ namespace UnityTcp.Editor.Tools
                     if (prefabOutputPath == null)
                         return Fail("Failed to resolve prefab output path");
 
-                    createdPrefabPath = outputType == "rigged"
-                        ? ReplaceAnimatedCharacterModelTool.CreateBlankPrefab(prefabOutputPath)
-                        : CreateBlankPrefab(prefabOutputPath);
+                    createdPrefabPath = CreateBlankPrefab(
+                        prefabOutputPath,
+                        isCharacterPlaceholder: outputType == "rigged");
                     if (string.IsNullOrEmpty(createdPrefabPath))
                         return Fail($"Failed to create prefab at: {prefabOutputPath}");
 
@@ -499,10 +533,13 @@ namespace UnityTcp.Editor.Tools
                     PrefabPath        = createdPrefabPath ?? "",
                     SourceModelPath   = sourceModelPath ?? "",
                     RiggedModelPath   = riggedModelPath ?? "",
-                    TargetPrefabPath = targetPrefabPath ?? "",
-                    AddMotion         = addMotion,
-                    MotionDescription = motionDescription ?? "",
+                    TargetPrefabPath  = targetPrefabPath ?? "",
+                    AddMotion         = false,
+                    MotionDescription = "",
                     LoopTime          = loopTime,
+                    ClipName          = clipName,
+                    ReplaceController = replaceController,
+                    TargetSize        = targetSize > 0f ? targetSize : 0f,
                     StartTime         = DateTime.Now
                 };
                 ImportModelTaskTracker.AddTask(task);
@@ -510,8 +547,7 @@ namespace UnityTcp.Editor.Tools
                 LaunchImport(task);
 
                 bool hasPlaceholder = !string.IsNullOrEmpty(createdPrefabPath);
-                // static 实测通常 3-8s 完成；agent 按 estimated_wait_seconds 起后台定时器，未完成会自动续
-                int estimatedWait = addMotion ? 900 : 60;
+                int estimatedWait = 60;
                 var result = new Dictionary<string, object>
                 {
                     { "success",              true },
@@ -520,13 +556,12 @@ namespace UnityTcp.Editor.Tools
                     { "status",               "importing" },
                     { "output_type",          outputType },
                     { "model_url",            modelUrl },
-                    { "add_motion",           addMotion },
                     { "estimated_wait_seconds", estimatedWait },
                     { "notification_mode",    "query_status" },
                     { "message",
                         (hasPlaceholder
                             ? "Import started. STEP 1 (do now): Instantiate the prefab at prefab_output_path — it contains a placeholder. "
-                            : "Import started (motion mode — no placeholder prefab; the controller is assigned to target_prefab_path automatically). ") +
+                            : "Import started (motion mode — no placeholder prefab; the clip is appended to the rigged character's AnimatorController and assigned to target_prefab_path automatically). ") +
                         "STEP 2 (do now): Wait in this subagent with run_shell_command(run_in_background=false), using Start-Sleep / sleep for at most 30 seconds. " +
                         "Keep ownership of this import; a timer finishing is not import completion, and the Unity-side push may never arrive. " +
                         "STEP 3: Do not call complete_task or return final text while the import is pending. " +
@@ -537,12 +572,12 @@ namespace UnityTcp.Editor.Tools
                 };
                 if (hasPlaceholder) result["prefab_output_path"] = createdPrefabPath;
                 if (outputType == "static") result["provider"] = provider;
-                if (addMotion) result["motion_description"] = motionDescription;
-                if (outputType == "rigged") result["source_model_path"] = sourceModelPath;
+                if (outputType == "rigged" && !string.IsNullOrEmpty(sourceModelPath)) result["source_model_path"] = sourceModelPath;
                 if (outputType == "motion")
                 {
                     result["rigged_model_path"]  = riggedModelPath;
                     result["target_prefab_path"] = targetPrefabPath ?? "";
+                    if (!string.IsNullOrEmpty(clipName)) result["clip_name"] = clipName;
                 }
                 return result;
             }
@@ -588,7 +623,14 @@ namespace UnityTcp.Editor.Tools
                         result["motion_fbx_path"] = task.ModelPath;
                 }
                 if (!string.IsNullOrEmpty(task.RiggedModelPath))  result["rigged_model_path"] = task.RiggedModelPath;
-                if (!string.IsNullOrEmpty(task.ControllerPath))    result["controller_path"] = task.ControllerPath;
+                if (!string.IsNullOrEmpty(task.ControllerPath))
+                {
+                    result["controller_path"] = task.ControllerPath;
+                    string[] states = RiggedModelPostProcess.GetControllerStateNames(task.ControllerPath);
+                    if (states.Length > 0)
+                        result["controller_states"] = states;
+                }
+                if (!string.IsNullOrEmpty(task.ClipName))         result["clip_name"] = task.ClipName;
                 if (!string.IsNullOrEmpty(task.TargetPrefabPath)) result["target_prefab_path"] = task.TargetPrefabPath;
                 if (!string.IsNullOrEmpty(task.ErrorMessage))     result["error"]        = task.ErrorMessage;
                 if (task.EndTime.HasValue)
@@ -701,8 +743,6 @@ namespace UnityTcp.Editor.Tools
             {
                 if (!string.IsNullOrEmpty(task.Prompt))
                     generator.SetTextPrompt(task.Prompt);
-                if (task.AddMotion && !string.IsNullOrWhiteSpace(task.MotionDescription))
-                    generator.SetAddMotion(true, task.MotionDescription.Trim());
             }
 
             string historyAssetPath = !string.IsNullOrEmpty(task.PrefabPath)
@@ -861,8 +901,25 @@ namespace UnityTcp.Editor.Tools
             }
         }
 
-        /// <summary>创建含 Cube 占位子节点的 Prefab（与被移除的 generate_3d_model_by_* 占位结构一致）。</summary>
-        internal static string CreateBlankPrefab(string path)
+        /// <summary>
+        /// 动作 FBX 文件名后缀：优先用清洗后的 clip_name（如 idle / walk / attack），
+        /// 未提供时回退到 URL 的 8 位短哈希，确保同一角色多段动作落盘不互相覆盖且重试幂等。
+        /// </summary>
+        internal static string BuildMotionFileSuffix(string clipName, string modelUrl)
+        {
+            if (!string.IsNullOrWhiteSpace(clipName))
+            {
+                string slug = BuildSafeBaseName(clipName).ToLowerInvariant();
+                if (!string.IsNullOrEmpty(slug) && slug != "import3d")
+                    return slug;
+            }
+
+            string hashName = BuildUrlHashFileName(modelUrl, "");
+            return hashName.Length >= 8 ? hashName.Substring(0, 8) : hashName;
+        }
+
+        /// <summary>创建含占位子节点的 Prefab（静态用 Cube，角色用 1.75m 接地 Capsule）。</summary>
+        internal static string CreateBlankPrefab(string path, bool isCharacterPlaceholder = false)
         {
             path = Path.ChangeExtension(path, ".prefab").Replace("\\", "/");
 
@@ -873,12 +930,17 @@ namespace UnityTcp.Editor.Tools
             var root = new GameObject(Path.GetFileNameWithoutExtension(path));
             try
             {
-                var placeholder = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                var placeholder = GameObject.CreatePrimitive(
+                    isCharacterPlaceholder ? PrimitiveType.Capsule : PrimitiveType.Cube);
                 placeholder.name = "Placeholder";
                 placeholder.transform.SetParent(root.transform);
-                placeholder.transform.localPosition = Vector3.zero;
+                placeholder.transform.localPosition = isCharacterPlaceholder
+                    ? new Vector3(0f, 0.875f, 0f)
+                    : Vector3.zero;
                 placeholder.transform.localRotation = Quaternion.identity;
-                placeholder.transform.localScale    = Vector3.one;
+                placeholder.transform.localScale = isCharacterPlaceholder
+                    ? new Vector3(0.6f, 0.875f, 0.6f)
+                    : Vector3.one;
 
                 PrefabUtility.SaveAsPrefabAsset(root, path);
             }
@@ -891,6 +953,71 @@ namespace UnityTcp.Editor.Tools
             TJGeneratorsGenerationLabel.EnableLabel(TJGeneratorsAssetReference.FromPath(path));
 
             return path;
+        }
+
+        /// <summary>
+        /// 将 {baseName}_Controller.controller 与 Avatar 绑到 Prefab 根节点 Animator（并同步到场景实例）。
+        /// </summary>
+        internal static void AssignAnimatorControllerIfMissing(string prefabPath, string modelPath)
+        {
+            if (string.IsNullOrEmpty(prefabPath) || string.IsNullOrEmpty(modelPath)) return;
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath);
+            if (prefab == null) return;
+
+            string dir = Path.GetDirectoryName(modelPath)?.Replace("\\", "/") ?? "";
+            string baseName = Path.GetFileNameWithoutExtension(modelPath);
+            string ctrlPath = Path.Combine(dir, baseName + "_Controller.controller").Replace("\\", "/");
+            var controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(ctrlPath);
+
+            var modelGO = AssetDatabase.LoadAssetAtPath<GameObject>(modelPath);
+            var avatar = modelGO?.GetComponent<Animator>()?.avatar;
+            if (avatar == null)
+            {
+                foreach (var obj in AssetDatabase.LoadAllAssetsAtPath(modelPath))
+                {
+                    if (obj is Avatar av && av.isValid) { avatar = av; break; }
+                }
+            }
+
+            var existingAnim = prefab.GetComponent<Animator>();
+            if (controller == null && existingAnim != null &&
+                existingAnim.runtimeAnimatorController != null && existingAnim.avatar != null)
+                return;
+
+            string prefabAssetPath = prefabPath.Replace("\\", "/");
+            using (var scope = new PrefabContentsEditScope(prefabAssetPath))
+            {
+                var root = scope.prefabContentsRoot;
+                var animator = root.GetComponent<Animator>() ?? root.AddComponent<Animator>();
+                if (controller != null && animator.runtimeAnimatorController == null)
+                    animator.runtimeAnimatorController = controller;
+                if (avatar != null && animator.avatar == null)
+                    animator.avatar = avatar;
+            }
+
+            AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(prefabAssetPath, ImportAssetOptions.ForceUpdate);
+
+            foreach (var anim in UnityObjectCompat.FindObjectsOfTypeIncludingInactive<Animator>())
+            {
+                if (anim == null) continue;
+                string sourcePath = PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(anim.gameObject);
+                if (!string.Equals(sourcePath, prefabAssetPath, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                bool changed = false;
+                if (controller != null && anim.runtimeAnimatorController == null)
+                {
+                    anim.runtimeAnimatorController = controller;
+                    changed = true;
+                }
+                if (avatar != null && anim.avatar == null)
+                {
+                    anim.avatar = avatar;
+                    changed = true;
+                }
+                if (changed)
+                    EditorUtility.SetDirty(anim);
+            }
         }
 
         internal static Dictionary<string, object> Fail(string message)

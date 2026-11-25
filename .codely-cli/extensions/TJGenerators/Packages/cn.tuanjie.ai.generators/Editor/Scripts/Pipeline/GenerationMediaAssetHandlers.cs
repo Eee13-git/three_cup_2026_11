@@ -117,8 +117,19 @@ namespace TJGenerators.Pipeline
 
                 TJLog.Log($"{LogTag} 纹理下载完成 [{i + 1}/{downloadUrls.Length}], 大小: {imageData.Length} bytes");
 
-                // 索引色 PNG（IHDR colorType=3）无真正 alpha；解码重编码为 RGBA32 再落盘。
-                imageData = GeneratedTextureImportUtils.EnsureRgba32PngBytes(imageData);
+                // 请求了 PNG 但后端仍可能回 JPEG（frontier-effect 常见）：按请求转成 PNG 再落盘。
+                // 未请求 PNG 时，仅对已是 PNG 的索引色做 RGBA32 重编码。
+                if (RequestsPngOutput(generator))
+                {
+                    bool wasPng = GeneratedTextureImportUtils.IsPngBytes(imageData);
+                    imageData = GeneratedTextureImportUtils.ConvertToPngBytes(imageData);
+                    if (!wasPng)
+                        TJLog.Log($"{LogTag} outputFormat=png：已将后端非 PNG 字节转码为 PNG 后落盘");
+                }
+                else
+                {
+                    imageData = GeneratedTextureImportUtils.EnsureRgba32PngBytes(imageData);
+                }
 
                 string savePath = i == 0
                     ? ResolveAndMigrateFirstTexturePath(firstSavePath, imageData, url)
@@ -318,6 +329,17 @@ namespace TJGenerators.Pipeline
         }
 
         // --- URL / 路径解析 ---
+
+        private static bool RequestsPngOutput(ModelGeneratorBase generator)
+        {
+            if (generator is DynamicGenerator dg)
+            {
+                string fmt = dg.GetParameter("outputFormat")?.ToString();
+                if (string.Equals(fmt, "png", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
 
         private static string TryPrepareSavePath(string savePath, string label)
         {

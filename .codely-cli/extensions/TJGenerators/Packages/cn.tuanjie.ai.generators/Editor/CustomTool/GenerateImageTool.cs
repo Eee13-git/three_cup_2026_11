@@ -168,7 +168,7 @@ namespace UnityTcp.Editor.Tools
     }
 
     /// <summary>
-    /// Shared Unity-side image task surface used by generate_game_ui_kit and LocalTaskTools.
+    /// Shared Unity-side image task surface for previously submitted tasks and LocalTaskTools.
     /// Plain image generation / sprite-sequence CustomTools have moved to MCP
     /// (generate_image / generate_sprite_animation / generate_eight_dir_sprite).
     /// Keeps ImageTaskTracker, QueryImageStatus/ListImageTasks, and ImagePipelineHost.

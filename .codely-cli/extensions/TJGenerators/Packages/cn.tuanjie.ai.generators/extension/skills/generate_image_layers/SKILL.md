@@ -11,20 +11,20 @@ description: "Split one image into multiple independent RGBA layers in Unity usi
 把一张图分解为独立 RGBA 图层（前景/背景/物件分层，便于在 Unity 中独立调整）。
 
 **两段式流程**：
-- **第一段·分层（MCP 后端）**：本地图片先 `file_upload` 拿 CDN URL → `generate_image_layers` 提交 → 后台轮询 → `check_task` 拿**底图 + 各图层 CDN URL 列表**（含 z_index/name/bounding_box 元数据）
-- **第二段·导入（Unity CustomTool）**：`import_image_from_url` **多图模式**（`image_urls` 逗号分隔，底图在前）→ 单任务批量导入到目标文件夹 → TextureImporter(Default) + 标签 → History 逐张补录（一图一格）→ 本次等待结束后 `query_local_task` 单次拉取
+- **第一段·分层（MCP 后端）**：本地图片先 `file_upload` 拿 CDN URL → `generate_image_layers` 提交 → 后台轮询 → `check_task` 拿**各图层的 CDN URL**；Seedream Pro 还返回底图及图层元数据
+- **第二段·导入（Unity CustomTool）**：`import_image_from_url` **多图模式**（`image_urls` 逗号分隔，按返回顺序）→ 单任务批量导入到目标文件夹 → TextureImporter(Default) + 标签 → History 逐张补录（一图一格）→ 本次等待结束后 `query_local_task` 单次拉取
 
 ## 🚦 执行五步
 
 1. `file_upload(本地图片)` → CDN URL（分层必须有输入图）
 2. MCP `generate_image_layers`：`image_url`（CDN）+ `prompt`（qwen 必填：一句话描述图片内容）+ `num_layers`（1-8，默认 4）+ `provider`（默认 `qwen`；`seedream_pro` 为自动拆分 1 底图+最多 16 层）→ 拿 `task_id` → 后台轮询
-3. `check_task` 一次 → 图层 URL 在 `output.data.imageUrls`（**数组**，底图在前；确认扩展名 .png/.jpg/.jpeg）
-4. `execute_custom_tool("import_image_from_url", {image_urls: "底图URL,图层1URL,...", names: "layer_0,layer_1,...", prompt, output_path: "Assets/.../MyLayers"})` → 拿 `task_id` + `layers_folder` → **在当前子代理内前台等待（每次最多30秒）（~30s）** → **在当前子代理内等待，不结束任务**
-5. 本次等待结束 → `query_local_task` **一次** → 读 `layer_0_path`（底图）/ `layers_folder` / `layer_count` / `layer_paths`；仍是 `importing` 则再进行一次前台短等待。**不要干等 Unity 侧推送**
+3. `check_task` 一次 → 读取结果中所有图层的 URL；Seedream Pro 的 `output.data.imageUrls` 首张是底图。确认扩展名 .png/.jpg/.jpeg
+4. `execute_custom_tool("import_image_from_url", {image_urls: "首张URL,第二张URL,...", names: "layer_0,layer_1,...", prompt, output_path: "Assets/.../MyLayers"})` → 拿 `task_id` + `layers_folder` → **在当前子代理内前台等待（每次最多30秒）（~30s）** → **在当前子代理内等待，不结束任务**
+5. 本次等待结束 → `query_local_task` **一次** → 读 `layer_0_path`（第一张导入图）/ `layers_folder` / `layer_count` / `layer_paths`；仍是 `importing` 则再进行一次前台短等待。**不要干等 Unity 侧推送**
 
 ## ⚠️ Skill 独有约束
 
-1. **底图在前**：`image_urls` 第一个是 base image（layer_0），其余是图层；`names` 与之一一对应（默认 layer_0/layer_1/...）
+1. **按实际 provider 解读**：Qwen 返回独立图层，第一张也要导入。只有 Seedream Pro 的第一张是底图；按实际返回的 z_index/name/bounding_box 辅助排布。`names` 与 URL 顺序一一对应。
 2. **一次任务导全部图层**——不要每层一个任务/一个等待者
 3. **🚫 webp 不可导入**——MCP `output_format` 只选 `png`（seedream_pro 的 webp 选项不要用）
 4. **图片≥512×512**（seedream_pro 要求）；本地文件必须先 `file_upload`
@@ -69,7 +69,7 @@ execute_custom_tool(
 
 ### `query_local_task`
 
-本次等待结束后调用**一次**；完成时返回 `layer_0_path`（底图）、`layers_folder`、`layer_count`、`layer_paths`（数组）。
+本次等待结束后调用**一次**；完成时返回 `layer_0_path`（第一张导入图）、`layers_folder`、`layer_count`、`layer_paths`（数组）。
 
 ## 故障处理
 

@@ -16,6 +16,7 @@ namespace ThreeCup.GrayBox
         [SerializeField] PlayerMotor2D rightPlayer;
         [SerializeField] WinChecker winChecker;
         [SerializeField] SceneDissolve sceneDissolve;
+        [SerializeField] FootprintSystem footprintSystem;
         [SerializeField] Transform levelRoot;
         [SerializeField] VisionWindow leftWindow;
         [SerializeField] VisionWindow rightWindow;
@@ -127,6 +128,9 @@ namespace ThreeCup.GrayBox
 
             // 上一关擦掉的常驻对象（中央墙、背景）要在这里还原
             if (sceneDissolve != null) sceneDissolve.ResetVisuals();
+
+            // 上一关留下的水渍要清掉
+            if (footprintSystem != null) footprintSystem.ClearAll();
 
             instance = Instantiate(config.LevelPrefab, levelRoot != null ? levelRoot : null);
             instance.name = config.LevelId;

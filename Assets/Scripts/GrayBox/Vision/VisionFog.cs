@@ -236,17 +236,13 @@ namespace ThreeCup.GrayBox
             int windowIndex = index >> 1;
             bool secondary = (index & 1) == 1;
 
+            // 分光缝已移除，2/3 号槽长期留空
+            if (secondary) return Disabled;
             if (windows == null || windowIndex >= windows.Length || windows[windowIndex] == null)
                 return Disabled;
 
             var window = windows[windowIndex];
-
-            if (!secondary)
-                return PackRect(window.ResolveCenter(), window.PrimarySize * 0.5f);
-
-            if (!window.SplitEnabled) return Disabled;
-
-            return PackRect(window.ResolveSecondaryCenter(), window.SecondarySize * 0.5f);
+            return PackRect(window.ResolveCenter(), window.PrimarySize * 0.5f);
         }
 
         Vector4 PackRect(Vector2 center, Vector2 half)

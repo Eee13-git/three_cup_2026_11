@@ -20,8 +20,4 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 99c22212897c7bb4bb733db337397afd, type: 2}
   - {fileID: 11400000, guid: a1751ec790192bb4c922b453271353ba, type: 2}
   - {fileID: 11400000, guid: 9fdb531b92d2d9f40a3c00e51a4ef1df, type: 2}
-  - {fileID: 11400000, guid: eca794ad745e6ec4b89dc950ef30bc1b, type: 2}
-  - {fileID: 11400000, guid: 0b343c2d2e790064581384a01e306486, type: 2}
-  - {fileID: 11400000, guid: 8505779b70fc2c24e8f9d60c23f5c7c2, type: 2}
-  - {fileID: 11400000, guid: 087c348ade785764cbd0b6497774c25c, type: 2}
   sceneName: YSQ_TestScene

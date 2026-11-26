@@ -12,5 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 69cdf8f8b91ad574bb36312369f41dc9, type: 3}
   m_Name: TutorialCatalog
   m_EditorClassIdentifier: 
-  levels: []
+  levels:
+  - {fileID: 11400000, guid: 1b6c00e38cab0634b9e5fa0531c53c81, type: 2}
+  - {fileID: 11400000, guid: 876c43016d6f5d44da1b72eca6d72ec1, type: 2}
+  - {fileID: 11400000, guid: fdee55daf426d7b42a53112be69341cd, type: 2}
   sceneName: YSQ_TestScene

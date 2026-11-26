@@ -15,6 +15,7 @@ namespace ThreeCup.GrayBox
 
         SpriteRenderer highlightRenderer;
         InputRouter router;
+        LevelSession session;
 
         public void Configure(PlayerSide newSide, GameObject highlightObject)
         {
@@ -46,7 +47,14 @@ namespace ThreeCup.GrayBox
             if (router == null) router = FindObjectOfType<InputRouter>();
             if (router == null) return;
 
-            SetHighlight(router.IsControlled(side));
+            if (session == null) session = FindObjectOfType<LevelSession>();
+
+            bool show = router.IsControlled(side);
+
+            // 进关绘制期间关卡还没"画"出来，高光提前亮着会穿帮
+            if (show && session != null && session.IsRevealing) show = false;
+
+            SetHighlight(show);
         }
 
         /// <summary>轮廓光跟着角色的帧和朝向，不然会露馅。</summary>

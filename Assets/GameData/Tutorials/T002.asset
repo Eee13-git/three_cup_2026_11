@@ -10,12 +10,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9cf69b78ea5d57e47a8baf5039637721, type: 3}
-  m_Name: L010
+  m_Name: T002
   m_EditorClassIdentifier: 
-  levelId: L010
-  displayName: "\u5173\u5361 10"
+  levelId: T002
+  displayName: "\u6559\u5B66 2 \xB7 \u989C\u6599\u7F50\u4E0E\u8865\u7B14\u5E26"
   enabled: 1
-  levelPrefab: {fileID: 6532840734209608402, guid: 77de88699ca6bdd4ea4452457e5111a0, type: 3}
+  levelPrefab: {fileID: 4087449674863353960, guid: 05287aac7e31d0943b26131b03088581, type: 3}
   windowSize: {x: 4, y: 3}
   leftWindowOffset: {x: 8, y: 0}
   rightWindowOffset: {x: -8, y: 0}

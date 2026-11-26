@@ -12,6 +12,10 @@ namespace ThreeCup.GrayBox
     {
         [Header("Scene references")]
         [SerializeField] LevelCatalog catalog;
+
+        [Tooltip("教学关目录；选关点教学关时按 levelId 在这里找")]
+        [SerializeField] LevelCatalog tutorialCatalog;
+
         [SerializeField] PlayerMotor2D leftPlayer;
         [SerializeField] PlayerMotor2D rightPlayer;
         [SerializeField] WinChecker winChecker;
@@ -43,6 +47,7 @@ namespace ThreeCup.GrayBox
 
         GameObject instance;
         LevelConfig current;
+        LevelCatalog activeCatalog;
         int currentIndex = -1;
         int deaths;
         Coroutine advance;
@@ -61,6 +66,9 @@ namespace ThreeCup.GrayBox
         /// <summary>死亡弹窗是否正在显示（这期间操作被锁住）。</summary>
         public bool DeathPopupVisible { get; private set; }
         public PlayerSide DeathPopupSide { get; private set; }
+
+        /// <summary>进关的"画出来"动画是否还在播。期间不该显示角色高光。</summary>
+        public bool IsRevealing => reveal != null;
 
         void Start()
         {
@@ -107,24 +115,42 @@ namespace ThreeCup.GrayBox
             if (Input.GetKeyDown(KeyCode.R)) RetryLevel();
         }
 
-        public void RetryLevel() => LoadIndex(currentIndex);
+        public void RetryLevel() => LoadInternal(current, currentIndex, activeCatalog);
 
-        public void Load(LevelConfig config) => LoadInternal(config, IndexOf(config));
+        public void Load(LevelConfig config)
+        {
+            var source = FindSource(config, out int index);
+            LoadInternal(config, index, source);
+        }
 
         public void LoadIndex(int index)
         {
             if (catalog == null) return;
 
-            LoadInternal(catalog.Get(index), index);
+            LoadInternal(catalog.Get(index), index, catalog);
         }
 
-        void LoadInternal(LevelConfig config, int index)
+        LevelCatalog FindSource(LevelConfig config, out int index)
+        {
+            index = IndexOf(catalog, config);
+            if (index >= 0) return catalog;
+
+            index = IndexOf(tutorialCatalog, config);
+            if (index >= 0) return tutorialCatalog;
+
+            index = -1;
+            return catalog;
+        }
+
+        void LoadInternal(LevelConfig config, int index, LevelCatalog source)
         {
             if (config == null || config.LevelPrefab == null) return;
 
             StopPendingRoutines();
 
             Unload();
+
+            activeCatalog = source != null ? source : catalog;
 
             // 上一关擦掉的常驻对象（中央墙、背景）要在这里还原
             if (sceneDissolve != null) sceneDissolve.ResetVisuals();
@@ -328,9 +354,16 @@ namespace ThreeCup.GrayBox
             if (current != null) ThreeCup.UI.LevelProgress.UnlockNext(current.LevelId);
 
             int next = currentIndex + 1;
-            if (catalog != null && next < catalog.Count)
+            if (activeCatalog != null && next < activeCatalog.Count)
             {
-                LoadIndex(next);
+                LoadInternal(activeCatalog.Get(next), next, activeCatalog);
+                yield break;
+            }
+
+            // 教学目录走完，接着进正式目录第一关
+            if (activeCatalog == tutorialCatalog && catalog != null && catalog.Count > 0)
+            {
+                LoadInternal(catalog.Get(0), 0, catalog);
                 yield break;
             }
 
@@ -338,23 +371,33 @@ namespace ThreeCup.GrayBox
             Debug.Log("[GrayBox] 已是最后一关");
         }
 
-        int IndexOf(LevelConfig config)
+        static int IndexOf(LevelCatalog source, LevelConfig config)
         {
-            if (catalog == null || config == null) return -1;
+            if (source == null || config == null) return -1;
 
-            for (int i = 0; i < catalog.Count; i++)
-                if (catalog.Get(i) == config) return i;
+            for (int i = 0; i < source.Count; i++)
+                if (source.Get(i) == config) return i;
 
             return -1;
         }
 
         LevelConfig FindById(string levelId)
         {
-            if (string.IsNullOrEmpty(levelId) || catalog == null) return null;
+            if (string.IsNullOrEmpty(levelId)) return null;
 
-            for (int i = 0; i < catalog.Count; i++)
+            var found = FindIn(catalog, levelId);
+            if (found != null) return found;
+
+            return FindIn(tutorialCatalog, levelId);
+        }
+
+        static LevelConfig FindIn(LevelCatalog source, string levelId)
+        {
+            if (source == null) return null;
+
+            for (int i = 0; i < source.Count; i++)
             {
-                var config = catalog.Get(i);
+                var config = source.Get(i);
                 if (config != null && config.LevelId == levelId) return config;
             }
 

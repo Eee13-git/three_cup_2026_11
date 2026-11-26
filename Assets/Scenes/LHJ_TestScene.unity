@@ -793,11 +793,6 @@ MonoBehaviour:
   side: 0
   owner: {fileID: 516008743}
   offset: {x: 8, y: 0}
-  splitEnabled: 0
-  splitOffset: {x: 0, y: 0.2}
-  primaryScale: 0.65
-  secondaryScale: 0.55
-  secondaryHeightScale: 0.85
   creaseFadeSeconds: 0.3
   zoomSizeScale: 1
   zoomOffsetScale: 1
@@ -927,11 +922,6 @@ MonoBehaviour:
   side: 1
   owner: {fileID: 2029397887}
   offset: {x: -8, y: 0}
-  splitEnabled: 0
-  splitOffset: {x: 0, y: 0.2}
-  primaryScale: 0.65
-  secondaryScale: 0.55
-  secondaryHeightScale: 0.85
   creaseFadeSeconds: 0.3
   zoomSizeScale: 1
   zoomOffsetScale: 1
@@ -2520,6 +2510,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   catalog: {fileID: 11400000, guid: e24d357a6ca179145b6af8fbdaa425e3, type: 2}
+  tutorialCatalog: {fileID: 11400000, guid: 0f8cd0ba4bb7a904f9cd236821f3b5f6, type: 2}
   leftPlayer: {fileID: 516008745}
   rightPlayer: {fileID: 2029397889}
   winChecker: {fileID: 1593211652}

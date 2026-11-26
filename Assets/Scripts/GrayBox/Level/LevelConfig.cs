@@ -25,5 +25,23 @@ namespace ThreeCup.GrayBox
         public Vector2 WindowSize => windowSize;
         public Vector2 LeftWindowOffset => leftWindowOffset;
         public Vector2 RightWindowOffset => rightWindowOffset;
+
+        /// <summary>编辑器/构建脚本用：一次性写入全部字段。</summary>
+        public void Configure(
+            string id,
+            string display,
+            GameObject prefab,
+            Vector2 visionSize,
+            Vector2 leftOffset,
+            Vector2 rightOffset)
+        {
+            levelId = id;
+            displayName = display;
+            levelPrefab = prefab;
+            windowSize = visionSize;
+            leftWindowOffset = leftOffset;
+            rightWindowOffset = rightOffset;
+            enabled = true;
+        }
     }
 }

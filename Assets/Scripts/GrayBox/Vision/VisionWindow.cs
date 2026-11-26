@@ -3,13 +3,11 @@ using UnityEngine;
 namespace ThreeCup.GrayBox
 {
     /// <summary>
-    /// Data + position of one reveal rectangle. The fog shader reads the resolved
-    /// rectangle every frame, so this component only has to describe it.
+    /// 一个透光口的位置与尺寸。遮蔽层 shader 每帧读取它算出的矩形，
+    /// 所以这个组件只负责描述"现在该照哪儿"。
     ///
-    /// 分光缝会把视窗拆成主、副两块：主块仍然照对面（尺寸缩小），
-    /// 副块照自己脚下。两块共用同一个所属侧与尺寸配置。
-    ///
-    /// 折痕会把主窗口沿一条线镜像翻转，于是能看到折痕另一侧的高度。
+    /// 折痕会把窗口沿一条线镜像翻转，能看到棱另一侧的高度；
+    /// 透镜会把窗口整体放大或缩小，同时改变观察距离。
     /// </summary>
     [ExecuteAlways]
     public sealed class VisionWindow : MonoBehaviour
@@ -17,21 +15,6 @@ namespace ThreeCup.GrayBox
         [SerializeField] PlayerSide side = PlayerSide.Left;
         [SerializeField] Transform owner;
         [SerializeField] Vector2 offset = new Vector2(8f, 0f);
-
-        [Header("Split")]
-        [SerializeField] bool splitEnabled;
-
-        [Tooltip("副窗口相对角色位置的偏移")]
-        [SerializeField] Vector2 splitOffset = new Vector2(0f, 0.2f);
-
-        [Tooltip("分裂后主窗口保留的尺寸比例")]
-        [SerializeField, Range(0.2f, 1f)] float primaryScale = 0.65f;
-
-        [Tooltip("副窗口的尺寸比例")]
-        [SerializeField, Range(0.2f, 1f)] float secondaryScale = 0.55f;
-
-        [Tooltip("副窗口高度比例")]
-        [SerializeField, Range(0.2f, 1f)] float secondaryHeightScale = 0.85f;
 
         [Header("Crease")]
         [Tooltip("视窗沿折痕翻过去（或翻回来）的过渡时长")]
@@ -45,16 +28,11 @@ namespace ThreeCup.GrayBox
         public Transform Owner => owner;
         public Vector2 Offset => offset;
         public Vector2 Size => new Vector2(transform.localScale.x, transform.localScale.y);
-        public bool SplitEnabled => splitEnabled;
         public bool HasCrease => hasCrease;
-
-        /// <summary>主窗口实际尺寸：分裂时缩小、透镜生效时缩放。</summary>
-        public Vector2 PrimarySize => Size * zoomSizeScale * (splitEnabled ? primaryScale : 1f);
-
         public float ZoomSizeScale => zoomSizeScale;
 
-        public Vector2 SecondarySize =>
-            new Vector2(Size.x * secondaryScale, Size.y * secondaryHeightScale);
+        /// <summary>主窗口实际尺寸：透镜生效时按比例缩放。</summary>
+        public Vector2 PrimarySize => Size * zoomSizeScale;
 
         bool hasCrease;
         Vector2 creaseA;
@@ -76,7 +54,6 @@ namespace ThreeCup.GrayBox
         {
             owner = newOwner;
             offset = newOffset;
-            splitEnabled = false;
             hasCrease = false;
             creaseTarget = 0f;
             creaseWeight = 0f;
@@ -96,13 +73,6 @@ namespace ThreeCup.GrayBox
             if (size.x <= 0f || size.y <= 0f) return;
 
             transform.localScale = new Vector3(size.x, size.y, 1f);
-        }
-
-        /// <summary>分光缝踩下 / 踩回。</summary>
-        public void SetSplit(bool value)
-        {
-            splitEnabled = value;
-            Refresh();
         }
 
         /// <summary>
@@ -151,10 +121,6 @@ namespace ThreeCup.GrayBox
             return point - 2f * Vector2.Dot(point - a, normal) * normal;
         }
 
-        /// <summary>副窗口（照自己脚下）的中心。</summary>
-        public Vector2 ResolveSecondaryCenter() =>
-            owner == null ? (Vector2)transform.position : (Vector2)owner.position + splitOffset;
-
         public void Refresh()
         {
             Vector2 target = ResolveCenter();
@@ -167,11 +133,6 @@ namespace ThreeCup.GrayBox
         {
             Gizmos.color = new Color(1f, 0.92f, 0.55f, 0.6f);
             Gizmos.DrawWireCube(ResolveCenter(), PrimarySize);
-
-            if (!splitEnabled) return;
-
-            Gizmos.color = new Color(0.55f, 0.85f, 1f, 0.7f);
-            Gizmos.DrawWireCube(ResolveSecondaryCenter(), SecondarySize);
         }
     }
 }

@@ -97,7 +97,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 151a6b2b7431f2348b174c452da0c88f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  influence: 1.25
+  influence: 1.5
   localStart: {x: -3.285, y: 0}
   localEnd: {x: 3.285, y: 0}
+  ownerFilter: 0
   visual: {fileID: 0}

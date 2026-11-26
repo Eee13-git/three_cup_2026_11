@@ -192,10 +192,10 @@ namespace ThreeCup.GrayBox
 
             // 遮蔽层从进关第一帧就盖住，显现动画只在它下面进行
             if (visionFog != null) visionFog.ResetFog();
+            // 提示板等绘制动画结束再出现，先清掉上一关的内容
+            if (tutorialHint != null) tutorialHint.Hide();
             if (reveal != null) StopCoroutine(reveal);
             reveal = StartCoroutine(RevealSequence());
-
-            if (tutorialHint != null) tutorialHint.Show(config, index + 1);
 
             LivesChanged?.Invoke(LivesRemaining);
         }
@@ -209,6 +209,9 @@ namespace ThreeCup.GrayBox
             if (!Failed) SetPlayersFrozen(false);
 
             reveal = null;
+
+            // 画布绘制完成后再把提示板放出来
+            if (!Failed && tutorialHint != null) tutorialHint.Show(current, currentIndex + 1);
         }
 
         public void Unload()
@@ -374,6 +377,9 @@ namespace ThreeCup.GrayBox
 
         IEnumerator AdvanceAfterDelay()
         {
+            // 提示板先退场，把整幅画布让出来
+            if (tutorialHint != null) yield return tutorialHint.FadeOutRoutine(0.4f);
+
             // 两处污渍都清完：遮蔽层用同样的扩散效果整层擦掉
             if (visionFog != null) yield return visionFog.DissolveRoutine();
 

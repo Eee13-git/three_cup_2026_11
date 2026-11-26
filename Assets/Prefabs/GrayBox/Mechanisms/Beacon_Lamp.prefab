@@ -146,7 +146,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef5224e8cd442fd4c90a32270ff9caed, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  targetSize: {x: 3.4, y: 2.2}
+  targetSize: {x: 5, y: 5}
   mirrorAcrossCenter: 1
   targetCenter: {x: 0, y: 0}
   targetOffset: {x: 0, y: 0}

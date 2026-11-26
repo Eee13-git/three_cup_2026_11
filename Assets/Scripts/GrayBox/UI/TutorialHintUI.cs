@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -6,7 +7,7 @@ namespace ThreeCup.GrayBox
     /// <summary>
     /// 关卡内常驻的教学提示卡：标题 + 正文 + 页脚。
     /// 文案由 LevelSession 在换关时推送；没有文案的关卡整张卡片隐藏。
-    /// 不做淡出——玩家想读多久都可以。
+    /// 进关时等画布绘制动画结束才出现，达成胜利条件后淡出，让出整幅画布。
     /// </summary>
     public sealed class TutorialHintUI : MonoBehaviour
     {
@@ -54,6 +55,31 @@ namespace ThreeCup.GrayBox
         {
             if (group != null) group.alpha = 0f;
             gameObject.SetActive(false);
+        }
+
+        /// <summary>胜利时淡出，让后面的画布展开不受遮挡。协程由 LevelSession 驱动。</summary>
+        public IEnumerator FadeOutRoutine(float seconds)
+        {
+            if (group == null || !gameObject.activeSelf) yield break;
+
+            float from = group.alpha;
+            if (from <= 0.001f)
+            {
+                Hide();
+                yield break;
+            }
+
+            float duration = Mathf.Max(0.01f, seconds);
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                group.alpha = Mathf.Lerp(from, 0f, Mathf.Clamp01(elapsed / duration));
+                yield return null;
+            }
+
+            Hide();
         }
 
         void Awake()

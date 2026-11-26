@@ -1849,6 +1849,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   ink: {fileID: 695701213}
+  progressSprite: {fileID: 21300000, guid: 1bb50819afa2ac344b9bbd7d87d6ed33, type: 3}
+  hoverSprite: {fileID: 21300000, guid: fb2688e05080b1f42ba30a7c286c2f92, type: 3}
 --- !u!1 &1975049677
 GameObject:
   m_ObjectHideFlags: 0

@@ -25,6 +25,7 @@ namespace ThreeCup.GrayBox
         [SerializeField] VisionWindow leftWindow;
         [SerializeField] VisionWindow rightWindow;
         [SerializeField] VisionFog visionFog;
+        [SerializeField] TutorialHintUI tutorialHint;
 
         [Header("Rules")]
         [SerializeField] int livesPerLevel = 3;
@@ -177,6 +178,8 @@ namespace ThreeCup.GrayBox
             if (visionFog != null) visionFog.ResetFog();
             if (reveal != null) StopCoroutine(reveal);
             reveal = StartCoroutine(RevealSequence());
+
+            if (tutorialHint != null) tutorialHint.Show(config, index + 1);
 
             LivesChanged?.Invoke(LivesRemaining);
         }

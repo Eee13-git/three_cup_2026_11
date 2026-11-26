@@ -2,6 +2,15 @@ using UnityEngine;
 
 namespace ThreeCup.GrayBox
 {
+    /// <summary>折痕作用范围：默认按折痕中点所在半屏判断，避免把对面角色的视窗也翻走。</summary>
+    public enum CreaseOwnerFilter
+    {
+        Auto,
+        Left,
+        Right,
+        Both
+    }
+
     /// <summary>
     /// 折痕：纸被折过的一道棱。颜料精灵靠近时，透光口沿这道棱翻到另一侧，
     /// 于是能看到折过去的那个高度；走开就恢复原样。
@@ -17,6 +26,9 @@ namespace ThreeCup.GrayBox
 
         [Tooltip("折痕在本地空间的终点")]
         [SerializeField] Vector2 localEnd = new Vector2(3.3f, 0f);
+
+        [Tooltip("这条折痕只翻哪一侧角色的视窗。Auto 按折痕中点所在半屏判断")]
+        [SerializeField] CreaseOwnerFilter ownerFilter = CreaseOwnerFilter.Auto;
 
         [SerializeField] SpriteRenderer visual;
 
@@ -35,6 +47,7 @@ namespace ThreeCup.GrayBox
 
             Vector2 a = transform.TransformPoint(localStart);
             Vector2 b = transform.TransformPoint(localEnd);
+            float midX = (a.x + b.x) * 0.5f;
 
             for (int i = 0; i < windows.Length; i++)
             {
@@ -44,9 +57,26 @@ namespace ThreeCup.GrayBox
                 var owner = window.Owner;
                 if (owner == null) continue;
 
+                if (!AppliesTo(owner.position.x, midX))
+                {
+                    window.ClearCrease();
+                    continue;
+                }
+
                 float distance = DistanceToSegment(owner.position, a, b);
                 if (distance <= influence) window.SetCrease(a, b);
                 else window.ClearCrease();
+            }
+        }
+
+        bool AppliesTo(float ownerX, float midX)
+        {
+            switch (ownerFilter)
+            {
+                case CreaseOwnerFilter.Left: return ownerX < 0f;
+                case CreaseOwnerFilter.Right: return ownerX > 0f;
+                case CreaseOwnerFilter.Both: return true;
+                default: return (ownerX < 0f) == (midX < 0f);
             }
         }
 

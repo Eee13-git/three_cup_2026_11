@@ -16,6 +16,15 @@ namespace ThreeCup.GrayBox
         [SerializeField] Transform owner;
         [SerializeField] Vector2 offset = new Vector2(8f, 0f);
 
+        [Header("Direction")]
+        [Tooltip("反向跟随：角色往右走，视窗往左走（关于 mirrorAxisX 镜像）。开启时 offset 通常填 (0, 0)")]
+        [SerializeField] bool invertX;
+        [SerializeField] float mirrorAxisX;
+
+        [Tooltip("垂直反向：角色往上走，视窗往下走（关于 mirrorAxisY 镜像）")]
+        [SerializeField] bool invertY;
+        [SerializeField] float mirrorAxisY;
+
         [Header("Crease")]
         [Tooltip("视窗沿折痕翻过去（或翻回来）的过渡时长")]
         [SerializeField] float creaseFadeSeconds = 0.3f;
@@ -29,6 +38,10 @@ namespace ThreeCup.GrayBox
         public Vector2 Offset => offset;
         public Vector2 Size => new Vector2(transform.localScale.x, transform.localScale.y);
         public bool HasCrease => hasCrease;
+        public bool InvertX => invertX;
+        public float MirrorAxisX => mirrorAxisX;
+        public bool InvertY => invertY;
+        public float MirrorAxisY => mirrorAxisY;
         public float ZoomSizeScale => zoomSizeScale;
 
         /// <summary>主窗口实际尺寸：透镜生效时按比例缩放。</summary>
@@ -54,6 +67,8 @@ namespace ThreeCup.GrayBox
         {
             owner = newOwner;
             offset = newOffset;
+            invertX = false;
+            invertY = false;
             hasCrease = false;
             creaseTarget = 0f;
             creaseWeight = 0f;
@@ -66,6 +81,44 @@ namespace ThreeCup.GrayBox
         {
             side = newSide;
             Configure(newOwner, newOffset);
+        }
+
+        /// <summary>
+        /// 换关时一次性写入窗口跟随的全部参数。invert 为 true 时角色位置先关于
+        /// mirrorAxis 镜像，再叠加 offset——角色往右走视窗往左走、往上走视窗往下走。
+        /// </summary>
+        public void Configure(
+            Transform newOwner,
+            Vector2 newOffset,
+            PlayerSide newSide,
+            bool invertHorizontal,
+            float mirrorAxisXValue)
+        {
+            Configure(newOwner, newOffset, newSide, invertHorizontal, mirrorAxisXValue, false, 0f);
+        }
+
+        public void Configure(
+            Transform newOwner,
+            Vector2 newOffset,
+            PlayerSide newSide,
+            bool invertHorizontal,
+            float mirrorAxisXValue,
+            bool invertVertical,
+            float mirrorAxisYValue)
+        {
+            side = newSide;
+            owner = newOwner;
+            offset = newOffset;
+            invertX = invertHorizontal;
+            mirrorAxisX = mirrorAxisXValue;
+            invertY = invertVertical;
+            mirrorAxisY = mirrorAxisYValue;
+            hasCrease = false;
+            creaseTarget = 0f;
+            creaseWeight = 0f;
+            zoomSizeScale = 1f;
+            zoomOffsetScale = 1f;
+            Refresh();
         }
 
         public void SetSize(Vector2 size)
@@ -108,8 +161,16 @@ namespace ThreeCup.GrayBox
             return Vector2.Lerp(center, Reflect(center, creaseA, creaseB), creaseWeight);
         }
 
-        Vector2 FollowCenter() =>
-            owner == null ? (Vector2)transform.position : (Vector2)owner.position + offset * zoomOffsetScale;
+        Vector2 FollowCenter()
+        {
+            if (owner == null) return transform.position;
+
+            Vector2 position = owner.position;
+            if (invertX) position.x = 2f * mirrorAxisX - position.x;
+            if (invertY) position.y = 2f * mirrorAxisY - position.y;
+
+            return position + offset * zoomOffsetScale;
+        }
 
         static Vector2 Reflect(Vector2 point, Vector2 a, Vector2 b)
         {

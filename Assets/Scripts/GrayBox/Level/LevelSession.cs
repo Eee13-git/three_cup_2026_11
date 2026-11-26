@@ -225,13 +225,27 @@ namespace ThreeCup.GrayBox
             if (leftWindow != null && leftPlayer != null)
             {
                 leftWindow.SetSize(config.WindowSize);
-                leftWindow.Configure(leftPlayer.transform, config.LeftWindowOffset, PlayerSide.Left);
+                leftWindow.Configure(
+                    leftPlayer.transform,
+                    config.LeftWindowOffset,
+                    PlayerSide.Left,
+                    config.LeftWindowInverted,
+                    config.WindowMirrorAxisX,
+                    config.LeftWindowInvertedY,
+                    config.WindowMirrorAxisY);
             }
 
             if (rightWindow != null && rightPlayer != null)
             {
                 rightWindow.SetSize(config.WindowSize);
-                rightWindow.Configure(rightPlayer.transform, config.RightWindowOffset, PlayerSide.Right);
+                rightWindow.Configure(
+                    rightPlayer.transform,
+                    config.RightWindowOffset,
+                    PlayerSide.Right,
+                    config.RightWindowInverted,
+                    config.WindowMirrorAxisX,
+                    config.RightWindowInvertedY,
+                    config.WindowMirrorAxisY);
             }
         }
 

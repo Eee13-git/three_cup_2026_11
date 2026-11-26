@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9cf69b78ea5d57e47a8baf5039637721, type: 3}
+  m_Name: T110
+  m_EditorClassIdentifier: 
+  levelId: T110
+  displayName: "\u6298\u75D5"
+  enabled: 1
+  levelPrefab: {fileID: 2411718215193518048, guid: c61ecb03e82ba80439ceb6242d5e5d39, type: 3}
+  windowSize: {x: 4, y: 3}
+  leftWindowOffset: {x: 8.2, y: 0}
+  rightWindowOffset: {x: -8.2, y: 0}
+  tutorialTitle: "\u6298\u75D5"
+  tutorialBody: "\u9760\u8FD1\u753B\u5E03\u4E0A\u7684\u6298\u75D5\u65F6\uFF0C\u89C6\u7A97\u4F1A\u6CBF\u6298\u75D5\u7FFB\u5230\u53E6\u4E00\u4FA7\uFF0C\u4E8E\u662F\u80FD\u770B\u5230\u5E73\u5E38\u770B\u4E0D\u5230\u7684\u9AD8\u5EA6\u3002\n\u8D70\u8FC7\u53BB\u8BA9\u6298\u75D5\u751F\u6548\uFF0C\u6CE8\u610F\u89C6\u7A97\u91CC\u51FA\u73B0\u7684\u60AC\u7A7A\u5E73\u53F0\u3002"

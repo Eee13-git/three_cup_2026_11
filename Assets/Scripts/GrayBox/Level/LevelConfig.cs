@@ -33,6 +33,12 @@ namespace ThreeCup.GrayBox
         [Tooltip("垂直反向的镜像水平线（世界 y）")]
         [SerializeField] float windowMirrorAxisY;
 
+        [Header("Tutorial")]
+        [Tooltip("进关提示卡的标题；留空则不显示提示卡")]
+        [SerializeField] string tutorialTitle = "";
+        [Tooltip("进关提示卡的正文，可换行")]
+        [SerializeField, TextArea(2, 6)] string tutorialBody = "";
+
         public string LevelId => levelId;
         public string DisplayName => displayName;
         public bool Enabled => enabled;
@@ -46,6 +52,8 @@ namespace ThreeCup.GrayBox
         public bool RightWindowInvertedY => rightWindowInvertedY;
         public float WindowMirrorAxisX => windowMirrorAxisX;
         public float WindowMirrorAxisY => windowMirrorAxisY;
+        public string TutorialTitle => tutorialTitle;
+        public string TutorialBody => tutorialBody;
 
         /// <summary>编辑器/构建脚本用：一次性写入全部字段。</summary>
         public void Configure(
@@ -104,6 +112,13 @@ namespace ThreeCup.GrayBox
             windowMirrorAxisX = mirrorAxisX;
             windowMirrorAxisY = mirrorAxisY;
             enabled = true;
+        }
+
+        /// <summary>编辑器/构建脚本用：写入教学提示文案。</summary>
+        public void ConfigureTutorial(string title, string body)
+        {
+            tutorialTitle = title;
+            tutorialBody = body;
         }
     }
 }

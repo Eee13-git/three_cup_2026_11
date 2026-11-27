@@ -91,6 +91,7 @@ namespace ThreeCup.EditorTools
 
                     problems += ValidateHazards(root, label, report);
                     problems += ValidateCheckpoints(root, label, report);
+                    problems += ValidateClearance(root, label, report);
 
                     if (!level.Enabled) report.AppendLine($"  {label} 已标记为禁用");
                 }
@@ -140,6 +141,56 @@ namespace ThreeCup.EditorTools
                     if (!hazardBounds.Intersects(spawnBounds)) continue;
 
                     report.AppendLine($"  {label} 出生点 {spawn.name} 与机关 {hazard.name} 重叠或贴得太近");
+                    problems++;
+                }
+            }
+
+            return problems;
+        }
+
+        /// <summary>
+        /// 头顶净空：角色身高 0.64，站在下层台面上时头顶不能贴到任何上层平台的底面。
+        /// 上下两层平台只要 x 有重叠、且上层底面离下层顶面小于 0.70，就会把人夹住。
+        /// </summary>
+        static int ValidateClearance(Transform root, string label, StringBuilder report)
+        {
+            int problems = 0;
+            var platforms = new List<(string name, float x1, float x2, float top, float bottom)>();
+
+            var terrain = root.Find("Terrain");
+            if (terrain == null) return 0;
+
+            foreach (Transform t in terrain)
+            {
+                var col = t.GetComponent<BoxCollider2D>();
+                if (col == null) continue;
+
+                var scale = t.lossyScale;
+                float w = Mathf.Abs(col.size.x * scale.x);
+                float h = Mathf.Abs(col.size.y * scale.y);
+                float cx = t.position.x;
+                float cy = t.position.y;
+                platforms.Add((t.name, cx - w * 0.5f, cx + w * 0.5f, cy + h * 0.5f, cy - h * 0.5f));
+            }
+
+            for (int i = 0; i < platforms.Count; i++)
+            {
+                for (int j = 0; j < platforms.Count; j++)
+                {
+                    if (i == j) continue;
+
+                    var lower = platforms[i];
+                    var upper = platforms[j];
+                    if (upper.bottom <= lower.top) continue;
+
+                    float gap = upper.bottom - lower.top;
+                    // gap≈0 是"石墩坐在地面上"，只是台阶，不算夹层
+                    if (gap < 0.05f || gap >= 0.70f) continue;
+
+                    float overlap = Mathf.Min(lower.x2, upper.x2) - Mathf.Max(lower.x1, upper.x1);
+                    if (overlap <= 0.02f) continue;
+
+                    report.AppendLine($"  {label} {lower.name} 与上层 {upper.name} 头顶间隙只有 {gap:0.##}（角色身高 0.64），会卡住");
                     problems++;
                 }
             }

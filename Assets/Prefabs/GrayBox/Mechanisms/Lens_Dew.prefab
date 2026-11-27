@@ -144,8 +144,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   side: 0
-  zoomInScale: {x: 1.7, y: 1.3}
-  zoomOutScale: {x: 0.55, y: 0.7}
+  zoomInScale: {x: 1.35, y: 1}
+  zoomOutScale: {x: 0.7, y: 1}
   visual: {fileID: 3393392537847238019}
   normalColor: {r: 1, g: 1, b: 1, a: 1}
   zoomInColor: {r: 0.7, g: 0.86, b: 1, a: 1}

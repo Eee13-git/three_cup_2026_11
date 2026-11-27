@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9cf69b78ea5d57e47a8baf5039637721, type: 3}
+  m_Name: L010
+  m_EditorClassIdentifier: 
+  levelId: L010
+  displayName: "\u706F"
+  enabled: 1
+  levelPrefab: {fileID: 7927964755817119630, guid: 0b0c3a793124f8e40b51ce684d04d4f9, type: 3}
+  windowSize: {x: 4, y: 3}
+  leftWindowOffset: {x: 8.2, y: 0.84}
+  rightWindowOffset: {x: -8.2, y: 1.08}
+  usePreviewOffsets: 1
+  leftWindowInverted: 0
+  rightWindowInverted: 0
+  leftWindowInvertedY: 0
+  rightWindowInvertedY: 0
+  windowMirrorAxisX: 0
+  windowMirrorAxisY: 0
+  tutorialTitle: 
+  tutorialBody: 

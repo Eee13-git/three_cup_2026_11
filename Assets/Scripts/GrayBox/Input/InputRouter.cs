@@ -6,6 +6,8 @@ namespace ThreeCup.GrayBox
     /// <summary>
     /// Owns the only input state in the prototype. Characters never read keys directly,
     /// so switching the controlled side can never leak into rendering or movement rules.
+    /// 单主控模式：WASD 驱动主控角色，方向键驱动另一个角色（两人可以同时动），
+    /// Q 或鼠标左键点角色切换谁是主控。
     /// </summary>
     public sealed class InputRouter : MonoBehaviour
     {
@@ -27,6 +29,10 @@ namespace ThreeCup.GrayBox
         void Update()
         {
             if (mode != ControlMode.SinglePlayer) return;
+
+            // Q 换手：WASD 交给另一个角色，方向键反过来接管刚才那个
+            if (Input.GetKeyDown(KeyCode.Q)) ToggleActiveSide();
+
             if (!Input.GetMouseButtonDown(0)) return;
 
             var cam = Camera.main;
@@ -68,13 +74,12 @@ namespace ThreeCup.GrayBox
         public void ToggleActiveSide() =>
             activeSide = activeSide == PlayerSide.Left ? PlayerSide.Right : PlayerSide.Left;
 
+        /// <summary>高亮圈看这个：单主控下只有主控算"被操控"（虽然另一个也能用方向键走）。</summary>
         public bool IsControlled(PlayerSide side) =>
             mode == ControlMode.TwoPlayer || side == activeSide;
 
         public float GetHorizontal(PlayerSide side)
         {
-            if (!IsControlled(side)) return 0f;
-
             if (mode == ControlMode.TwoPlayer)
             {
                 return side == PlayerSide.Left
@@ -82,15 +87,14 @@ namespace ThreeCup.GrayBox
                     : Axis(KeyCode.LeftArrow, KeyCode.RightArrow);
             }
 
-            // Single player: only one character listens, so both key sets may drive it.
-            float wasd = Axis(KeyCode.A, KeyCode.D);
-            return Mathf.Approximately(wasd, 0f) ? Axis(KeyCode.LeftArrow, KeyCode.RightArrow) : wasd;
+            // 单主控：WASD 给主控，方向键给另一个角色
+            return side == activeSide
+                ? Axis(KeyCode.A, KeyCode.D)
+                : Axis(KeyCode.LeftArrow, KeyCode.RightArrow);
         }
 
         public bool GetJumpDown(PlayerSide side)
         {
-            if (!IsControlled(side)) return false;
-
             if (mode == ControlMode.TwoPlayer)
             {
                 return side == PlayerSide.Left
@@ -98,9 +102,10 @@ namespace ThreeCup.GrayBox
                     : Input.GetKeyDown(KeyCode.UpArrow);
             }
 
-            return Input.GetKeyDown(KeyCode.W)
-                || Input.GetKeyDown(KeyCode.UpArrow)
-                || Input.GetKeyDown(KeyCode.Space);
+            // 主控用 W（外加空格），另一个用 ↑
+            return side == activeSide
+                ? Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.Space)
+                : Input.GetKeyDown(KeyCode.UpArrow);
         }
 
         static float Axis(KeyCode negative, KeyCode positive) =>

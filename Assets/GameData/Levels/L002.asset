@@ -13,14 +13,15 @@ MonoBehaviour:
   m_Name: L002
   m_EditorClassIdentifier: 
   levelId: L002
-  displayName: "\u53CD\u7740\u770B"
+  displayName: "\u6298\u8FD4"
   enabled: 1
-  levelPrefab: {fileID: 4025440712880832546, guid: ac8405910afc54a4eba57eb820437e3d, type: 3}
+  levelPrefab: {fileID: 5378782486286129097, guid: dd560eedc651fb84b85236643c386f77, type: 3}
   windowSize: {x: 4, y: 3}
-  leftWindowOffset: {x: 0, y: 0}
-  rightWindowOffset: {x: 0, y: 0}
-  leftWindowInverted: 1
-  rightWindowInverted: 1
+  leftWindowOffset: {x: 12.48, y: 0}
+  rightWindowOffset: {x: -12.48, y: 0}
+  usePreviewOffsets: 1
+  leftWindowInverted: 0
+  rightWindowInverted: 0
   leftWindowInvertedY: 0
   rightWindowInvertedY: 0
   windowMirrorAxisX: 0

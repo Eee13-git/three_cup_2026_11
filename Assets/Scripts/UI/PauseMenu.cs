@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using ThreeCup.GrayBox;
 
 namespace ThreeCup.UI
 {
@@ -26,6 +27,7 @@ namespace ThreeCup.UI
         [SerializeField] string mainMenuSceneName = "Start";
 
         bool paused;
+        LevelSession session;
 
         void Awake()
         {
@@ -41,6 +43,13 @@ namespace ThreeCup.UI
         {
             if (!Input.GetKeyDown(KeyCode.Escape)) return;
 
+            // 胜利界面不弹暂停菜单：ESC 直接回主界面
+            if (IsVictory)
+            {
+                OnMainMenu();
+                return;
+            }
+
             // 设置面板开着时，ESC 先关设置面板
             if (settingsPanel != null && settingsPanel.activeSelf)
             {
@@ -49,6 +58,15 @@ namespace ThreeCup.UI
             }
 
             SetPaused(!paused);
+        }
+
+        bool IsVictory
+        {
+            get
+            {
+                if (session == null) session = FindObjectOfType<LevelSession>();
+                return session != null && session.Victory;
+            }
         }
 
         void SetPaused(bool value)

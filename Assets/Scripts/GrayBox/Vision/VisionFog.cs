@@ -41,7 +41,9 @@ namespace ThreeCup.GrayBox
         static readonly int RectBId = Shader.PropertyToID("_RectB");
         static readonly int RectCId = Shader.PropertyToID("_RectC");
         static readonly int RectDId = Shader.PropertyToID("_RectD");
-        static readonly int HolesId = Shader.PropertyToID("_Holes");
+        // 名字与 shader 里的 _LightHoles 对应：Unity 按属性名缓存数组长度，
+        // 换新名字才能在不重启编辑器的情况下把槽位从 4 扩到 12。
+        static readonly int HolesId = Shader.PropertyToID("_LightHoles");
         static readonly int HoleFeatherId = Shader.PropertyToID("_HoleFeather");
         static readonly int EdgeStrengthId = Shader.PropertyToID("_EdgeStrength");
         static readonly int SeedsId = Shader.PropertyToID("_Seeds");
@@ -51,8 +53,11 @@ namespace ThreeCup.GrayBox
 
         const int MaxSeeds = 4;
 
-        /// <summary>漏光缝最多同时生效的数量，受 shader 数组长度限制。</summary>
-        const int MaxHoles = 4;
+        /// <summary>
+        /// 最多同时生效的洞数量，受 shader 数组长度限制（VisionFog.shader 的 _Holes）。
+        /// 照面灯每盏占 2 个洞（对面光斑 + 脚下），所以 12 个槽位够 6 盏灯同时亮着。
+        /// </summary>
+        const int MaxHoles = 12;
 
         readonly Vector4[] seeds = new Vector4[MaxSeeds];
         readonly float[] radii = new float[MaxSeeds];

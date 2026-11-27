@@ -169,7 +169,16 @@ namespace ThreeCup.GrayBox
             if (invertX) position.x = 2f * mirrorAxisX - position.x;
             if (invertY) position.y = 2f * mirrorAxisY - position.y;
 
-            return position + offset * zoomOffsetScale;
+            Vector2 center = position + offset * zoomOffsetScale;
+
+            // 透镜会按倍率缩放观察距离，缩得太狠时窗口中心会越过中缝跑到角色自己这一侧，
+            // 之后 VisionFog 按中心所在侧裁剪，看起来就是"视窗穿到了另一边"。
+            // 这里按角色实际站的那半屏兜底，保证窗口始终开在对面。
+            const float KeepInOppositeHalf = 0.25f;
+            if (owner.position.x >= 0f) center.x = Mathf.Min(center.x, -KeepInOppositeHalf);
+            else center.x = Mathf.Max(center.x, KeepInOppositeHalf);
+
+            return center;
         }
 
         static Vector2 Reflect(Vector2 point, Vector2 a, Vector2 b)

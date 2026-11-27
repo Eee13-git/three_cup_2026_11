@@ -22,6 +22,12 @@ namespace ThreeCup.GrayBox
         [SerializeField] float duration = 0.7f;
         [SerializeField] float softness = 0.22f;
 
+        [Tooltip("每次擦除时在污渍内部随机撒点，而不是固定几个位置")]
+        [SerializeField] bool randomizeSeeds = true;
+
+        [Tooltip("随机点的散布范围（占污渍尺寸的比例）")]
+        [SerializeField, Range(0.1f, 1f)] float randomSpread = 0.6f;
+
         [Tooltip("相邻起点之间的起始延时（占整段的比例）")]
         [SerializeField] float stagger = 0.12f;
 
@@ -62,7 +68,7 @@ namespace ThreeCup.GrayBox
             {
                 if (i < count)
                 {
-                    Vector2 p = center + seedOffsets[i];
+                    Vector2 p = randomizeSeeds ? RandomSeed(bounds, center, i) : center + seedOffsets[i];
                     seeds[i] = new Vector4(p.x, p.y, 0f, 0f);
 
                     // 该起点要扩散到污渍最远角，才算擦干净
@@ -92,6 +98,35 @@ namespace ThreeCup.GrayBox
             block.SetFloatArray(RadiiId, radii);
             block.SetFloat(SoftnessId, softness);
             target.SetPropertyBlock(block);
+        }
+
+        /// <summary>
+        /// 在污渍包围盒内随机取一个起点，并尽量和前几个点拉开距离，
+        /// 免得三个点挤在一起、擦除看起来像只从一个地方散开。
+        /// </summary>
+        Vector2 RandomSeed(Bounds bounds, Vector2 center, int index)
+        {
+            Vector2 size = bounds.size;
+            float minGap = Mathf.Min(size.x, size.y) * 0.22f;
+            Vector2 point = center;
+
+            for (int attempt = 0; attempt < 16; attempt++)
+            {
+                point = new Vector2(
+                    center.x + Random.Range(-0.5f, 0.5f) * size.x * randomSpread,
+                    center.y + Random.Range(-0.5f, 0.5f) * size.y * randomSpread);
+
+                bool farEnough = true;
+                for (int j = 0; j < index; j++)
+                {
+                    var other = new Vector2(seeds[j].x, seeds[j].y);
+                    if ((point - other).sqrMagnitude < minGap * minGap) { farEnough = false; break; }
+                }
+
+                if (farEnough) break;
+            }
+
+            return point;
         }
 
         void Update()

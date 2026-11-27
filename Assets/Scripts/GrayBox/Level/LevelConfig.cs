@@ -19,6 +19,9 @@ namespace ThreeCup.GrayBox
         [SerializeField] Vector2 rightWindowOffset = new Vector2(-8f, 0f);
 
         [Header("Vision Direction")]
+        [Tooltip("关卡预制体里的 WindowPreview_Left/Right 决定视窗初位与尺寸；关掉则回到手填的 offset")]
+        [SerializeField] bool usePreviewOffsets = true;
+
         [Tooltip("反向跟随：角色往右走，视窗往左走。开启时该侧 offset 通常填 (0, 0)")]
         [SerializeField] bool leftWindowInverted;
         [SerializeField] bool rightWindowInverted;
@@ -52,6 +55,7 @@ namespace ThreeCup.GrayBox
         public bool RightWindowInvertedY => rightWindowInvertedY;
         public float WindowMirrorAxisX => windowMirrorAxisX;
         public float WindowMirrorAxisY => windowMirrorAxisY;
+        public bool UsePreviewOffsets => usePreviewOffsets;
         public string TutorialTitle => tutorialTitle;
         public string TutorialBody => tutorialBody;
 

@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d735890d2360a34f85189d9ddc22bcd, type: 3}
+  m_Name: BackdropLibrary
+  m_EditorClassIdentifier: 
+  sprites:
+  - {fileID: 21300000, guid: 4a570bb0ffa262c4d9e92bf34c5f2712, type: 3}
+  - {fileID: 21300000, guid: 3f73c9a7cce1c884592a884a08aed844, type: 3}
+  - {fileID: 21300000, guid: 5c4c43b9bc839ac49921dba72fd41d2b, type: 3}
+  - {fileID: 21300000, guid: dacbe59534dc5f3478208003f051f8d9, type: 3}
+  - {fileID: 21300000, guid: 5cf1d1938c9365b4ca3ed78ae3ca7ba9, type: 3}
+  - {fileID: 21300000, guid: d77a1677e4842324ca229b7188fc1af3, type: 3}
+  - {fileID: 21300000, guid: 8b25fa839de62e04291c5a03ba218e2d, type: 3}
+  - {fileID: 21300000, guid: da111e1d242351344b391f25b32c19f6, type: 3}
+  - {fileID: 21300000, guid: 82c311b3a3978174fa493d910f95cc15, type: 3}
+  - {fileID: 21300000, guid: 449bb421ab11e684aacc7e3323d338fa, type: 3}

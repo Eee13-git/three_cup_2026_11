@@ -61,6 +61,13 @@ namespace ThreeCup.GrayBox
         public GameObject Instance => instance;
         public int CurrentIndex => currentIndex;
         public bool Failed { get; private set; }
+
+        /// <summary>通关最后一关后置位，胜利弹窗读这个。</summary>
+        public bool Victory { get; private set; }
+
+        /// <summary>当前目录的关卡数，胜利弹窗落款用。</summary>
+        public int LevelCount => activeCatalog != null ? activeCatalog.Count : 0;
+
         public int LivesPerLevel => livesPerLevel;
         public int LivesRemaining => Mathf.Max(0, livesPerLevel - deaths);
 
@@ -104,6 +111,9 @@ namespace ThreeCup.GrayBox
 
             if (!enableHotkeys || catalog == null) return;
 
+#if UNITY_EDITOR
+            // 跳关调试键（1-9 直选、Tab/Shift+Tab 前后跳、End 到最后一关）只在编辑器里生效，
+            // 打包后按这些键不会跳关。
             for (int i = 0; i < 9 && i < catalog.Count; i++)
             {
                 if (Input.GetKeyDown((KeyCode)((int)KeyCode.Alpha1 + i)))
@@ -113,7 +123,6 @@ namespace ThreeCup.GrayBox
                 }
             }
 
-            // 调试跳转：Tab 下一关、Shift+Tab 上一关、End 直接到最后一关
             if (Input.GetKeyDown(KeyCode.Tab) && catalog.Count > 0)
             {
                 bool back = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
@@ -128,7 +137,9 @@ namespace ThreeCup.GrayBox
                 LoadIndex(catalog.Count - 1);
                 return;
             }
+#endif
 
+            // 重开本关：失败弹窗上写着「按 R」，正式包里也要保留
             if (Input.GetKeyDown(KeyCode.R)) RetryLevel();
         }
 
@@ -182,6 +193,7 @@ namespace ThreeCup.GrayBox
 
             deaths = 0;
             Failed = false;
+            Victory = false;
             DeathPopupVisible = false;
             SetPlayersFrozen(false);
 
@@ -243,13 +255,25 @@ namespace ThreeCup.GrayBox
 
         void ApplyWindows(LevelConfig config)
         {
+            Vector2 leftSize = config.WindowSize;
+            Vector2 rightSize = config.WindowSize;
+            Vector2 leftOffset = config.LeftWindowOffset;
+            Vector2 rightOffset = config.RightWindowOffset;
+
+            // 预制体里摆的 WindowPreview 就是视窗初位：位置决定 offset，缩放决定尺寸
+            if (config.UsePreviewOffsets && instance != null)
+            {
+                leftOffset = ResolvePreviewOffset(config, "WindowPreview_Left", leftPlayer, true, ref leftSize, leftOffset);
+                rightOffset = ResolvePreviewOffset(config, "WindowPreview_Right", rightPlayer, false, ref rightSize, rightOffset);
+            }
+
             // 压纸钉按 side 找窗口，所以这里必须带上所属侧
             if (leftWindow != null && leftPlayer != null)
             {
-                leftWindow.SetSize(config.WindowSize);
+                leftWindow.SetSize(leftSize);
                 leftWindow.Configure(
                     leftPlayer.transform,
-                    config.LeftWindowOffset,
+                    leftOffset,
                     PlayerSide.Left,
                     config.LeftWindowInverted,
                     config.WindowMirrorAxisX,
@@ -259,16 +283,46 @@ namespace ThreeCup.GrayBox
 
             if (rightWindow != null && rightPlayer != null)
             {
-                rightWindow.SetSize(config.WindowSize);
+                rightWindow.SetSize(rightSize);
                 rightWindow.Configure(
                     rightPlayer.transform,
-                    config.RightWindowOffset,
+                    rightOffset,
                     PlayerSide.Right,
                     config.RightWindowInverted,
                     config.WindowMirrorAxisX,
                     config.RightWindowInvertedY,
                     config.WindowMirrorAxisY);
             }
+        }
+
+        /// <summary>
+        /// 预览物体的世界位置就是视窗初始中心；反推 offset 时要先按视窗方向镜像角色位置。
+        /// 读完后把预览藏起来，避免运行时挡住地形。
+        /// </summary>
+        Vector2 ResolvePreviewOffset(
+            LevelConfig config,
+            string previewName,
+            PlayerMotor2D player,
+            bool isLeft,
+            ref Vector2 size,
+            Vector2 fallback)
+        {
+            if (player == null || instance == null) return fallback;
+
+            var preview = FindDeep(instance.transform, previewName);
+            if (preview == null) return fallback;
+
+            Vector2 basePosition = player.transform.position;
+            if (isLeft ? config.LeftWindowInverted : config.RightWindowInverted)
+                basePosition.x = 2f * config.WindowMirrorAxisX - basePosition.x;
+            if (isLeft ? config.LeftWindowInvertedY : config.RightWindowInvertedY)
+                basePosition.y = 2f * config.WindowMirrorAxisY - basePosition.y;
+
+            Vector3 scale = preview.lossyScale;
+            if (scale.x > 0.01f && scale.y > 0.01f) size = new Vector2(scale.x, scale.y);
+
+            preview.gameObject.SetActive(false);
+            return (Vector2)preview.position - basePosition;
         }
 
         void PlacePlayer(PlayerMotor2D player, string markerName)
@@ -372,6 +426,8 @@ namespace ThreeCup.GrayBox
         {
             if (advance != null) return;
 
+            // 通关瞬间就锁住操作，表演期间不能再跑动
+            SetPlayersFrozen(true);
             advance = StartCoroutine(AdvanceAfterDelay());
         }
 
@@ -406,7 +462,8 @@ namespace ThreeCup.GrayBox
                 yield break;
             }
 
-            // 最后一关：以后把胜利窗口挂在这里
+            // 最后一关：演出结束后拉下胜利弹窗
+            Victory = true;
             Debug.Log("[GrayBox] 已是最后一关");
         }
 

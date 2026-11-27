@@ -110,3 +110,6 @@ InitTestScene*.unity*
 
 # Tuanjie Codely local index cache (huge, regenerable by the editor)
 /.codely-cli/UnityInsight/
+
+# Codely chat auto-saves (machine-local, may contain API keys)
+/.codely-cli/auto-saves/

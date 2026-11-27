@@ -18,6 +18,10 @@ namespace ThreeCup.UI
         const string KEY_BRIGHT = "Settings.Brightness";
         const string KEY_FULLSCREEN = "Settings.Fullscreen";
 
+        // 窗口模式下的默认尺寸：游戏按 1920×1080（16:9）设计
+        const int WindowedWidth = 1920;
+        const int WindowedHeight = 1080;
+
         Image brightnessOverlay;
 
         float masterVolume = 1f;
@@ -39,7 +43,12 @@ namespace ThreeCup.UI
         public bool Fullscreen
         {
             get => fullscreen;
-            set { fullscreen = value; PlayerPrefs.SetInt(KEY_FULLSCREEN, fullscreen ? 1 : 0); Screen.fullScreen = fullscreen; }
+            set
+            {
+                fullscreen = value;
+                PlayerPrefs.SetInt(KEY_FULLSCREEN, fullscreen ? 1 : 0);
+                ApplyDisplay();
+            }
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -103,7 +112,23 @@ namespace ThreeCup.UI
             sfxVolume = PlayerPrefs.GetFloat(KEY_SFX, 1f);
             brightness = PlayerPrefs.GetFloat(KEY_BRIGHT, 1f);
             fullscreen = PlayerPrefs.GetInt(KEY_FULLSCREEN, 1) != 0;
-            Screen.fullScreen = fullscreen;
+            ApplyDisplay();
+        }
+
+        /// <summary>
+        /// 全屏时显式切到显示器的原生分辨率。只写 Screen.fullScreen 会沿用当前窗口尺寸，
+        /// 一旦之前的窗口比较小（或者被拖动过），全屏就是放大拉伸，画面会糊。
+        /// </summary>
+        void ApplyDisplay()
+        {
+            if (fullscreen)
+            {
+                Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.FullScreenWindow);
+            }
+            else
+            {
+                Screen.SetResolution(WindowedWidth, WindowedHeight, FullScreenMode.Windowed);
+            }
         }
 
         void ApplyBrightness()

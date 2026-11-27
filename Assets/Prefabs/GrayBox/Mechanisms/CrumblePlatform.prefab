@@ -66,7 +66,7 @@ BoxCollider2D:
   m_IsTrigger: 0
   m_UsedByEffector: 0
   m_UsedByComposite: 0
-  m_Offset: {x: 0, y: 0.19}
+  m_Offset: {x: 0.00080400705, y: 0.16587953}
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0, y: 0}
@@ -77,7 +77,7 @@ BoxCollider2D:
     adaptiveTiling: 0
   m_AutoTiling: 0
   serializedVersion: 2
-  m_Size: {x: 1, y: 0.45}
+  m_Size: {x: 0.8568846, y: 0.39854267}
   m_EdgeRadius: 0
 --- !u!114 &3378772027098680610
 MonoBehaviour:
@@ -91,17 +91,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 121bc163cb33a644da462fe2616d1a11, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  standDelay: 0.6
+  touchDelay: 2
   fadeDuration: 0.15
   fadedDelay: 2.2
   restoreDuration: 0.35
   blockRenderer: {fileID: 5106238744766104241}
   fadedAlpha: 0.18
-  standCheckSize: {x: 0.85, y: 0.3}
+  shakeAmplitude: 0.03
+  shakeFrequency: 18
+  touchPadding: 0.06
   riderCheckSize: {x: 1.4, y: 0.8}
-  playerMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
 --- !u!1 &4521212900008304297
 GameObject:
   m_ObjectHideFlags: 0

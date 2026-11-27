@@ -71,8 +71,11 @@ Shader "GrayBox/VisionFog"
             float4 _RectC;
             float4 _RectD;
 
-            // 漏光缝：额外挖开的椭圆（center.xy, halfSize.xy），未使用的填成极远处
-            float4 _Holes[4];
+            // 漏光缝：额外挖开的椭圆（center.xy, halfSize.xy），未使用的填成极远处。
+            // 长度必须与 VisionFog.MaxHoles 一致；照面灯每盏占 2 个洞。
+            // 名字不用 _Holes：Unity 会按属性名缓存数组长度，改长度后必须重启编辑器才生效，
+            // 换一个新名字能跳过这份缓存。
+            float4 _LightHoles[12];
 
             // 漏光缝的羽化单独放大，让边缘慢慢融进裱纸，而不是切出一个口子
             float _HoleFeather;
@@ -115,9 +118,9 @@ Shader "GrayBox/VisionFog"
                 // 漏光缝按椭圆挖开，边缘用更大的羽化融进裱纸；
                 // 只有洞内才透光，不做成矩形窗口。
                 [unroll]
-                for (int h = 0; h < 4; h++)
+                for (int h = 0; h < 12; h++)
                 {
-                    float4 hole = _Holes[h];
+                    float4 hole = _LightHoles[h];
                     if (hole.z > 0.002)
                     {
                         float holeDistance = EllipseDistance(i.worldPos.xy, hole);

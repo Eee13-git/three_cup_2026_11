@@ -4,8 +4,9 @@ namespace ThreeCup.GrayBox
 {
     /// <summary>
     /// 透镜（露珠）：画里草叶上凝着的一滴水。踩一下让透光口放大，
-    /// 再踩缩成一小块，第三次恢复。放大看得远但对面近端会漏掉，
-    /// 缩小看得窄但落点更准。
+    /// 再踩缩成一小块，第三次恢复。
+    /// 透光口的总面积有限——自己放大时，对面的窗口会同时缩小；
+    /// 自己缩小时，对面反而放大。所以用之前要先想清楚谁更需要视野。
     /// </summary>
     [RequireComponent(typeof(Collider2D))]
     public sealed class LensStation : MonoBehaviour
@@ -16,10 +17,10 @@ namespace ThreeCup.GrayBox
 
         [Header("Zoom")]
         [Tooltip("放大时的视窗尺寸倍率与偏移倍率")]
-        [SerializeField] Vector2 zoomInScale = new Vector2(1.7f, 1.3f);
+        [SerializeField] Vector2 zoomInScale = new Vector2(1.35f, 1f);
 
         [Tooltip("缩小时的视窗尺寸倍率与偏移倍率")]
-        [SerializeField] Vector2 zoomOutScale = new Vector2(0.55f, 0.7f);
+        [SerializeField] Vector2 zoomOutScale = new Vector2(0.7f, 1f);
 
         [Header("Visual")]
         [SerializeField] SpriteRenderer visual;
@@ -61,27 +62,37 @@ namespace ThreeCup.GrayBox
 
         void Apply()
         {
-            if (window != null)
-            {
-                switch (mode)
-                {
-                    case Mode.ZoomIn:
-                        window.SetZoom(zoomInScale.x, zoomInScale.y);
-                        break;
-                    case Mode.ZoomOut:
-                        window.SetZoom(zoomOutScale.x, zoomOutScale.y);
-                        break;
-                    default:
-                        window.SetZoom(1f, 1f);
-                        break;
-                }
-            }
+            ApplyZoom(window, mode);
+
+            // 一边放大，另一边就缩小
+            var other = OtherWindow();
+            ApplyZoom(other, mode == Mode.ZoomIn ? Mode.ZoomOut
+                              : mode == Mode.ZoomOut ? Mode.ZoomIn
+                              : Mode.Normal);
 
             if (visual == null) return;
 
             visual.color = mode == Mode.ZoomIn ? zoomInColor
                          : mode == Mode.ZoomOut ? zoomOutColor
                          : normalColor;
+        }
+
+        void ApplyZoom(VisionWindow target, Mode value)
+        {
+            if (target == null) return;
+
+            switch (value)
+            {
+                case Mode.ZoomIn:
+                    target.SetZoom(zoomInScale.x, zoomInScale.y);
+                    break;
+                case Mode.ZoomOut:
+                    target.SetZoom(zoomOutScale.x, zoomOutScale.y);
+                    break;
+                default:
+                    target.SetZoom(1f, 1f);
+                    break;
+            }
         }
 
         void EnsureWindow()
@@ -97,9 +108,23 @@ namespace ThreeCup.GrayBox
             }
         }
 
+        VisionWindow OtherWindow()
+        {
+            foreach (var candidate in FindObjectsOfType<VisionWindow>())
+            {
+                if (candidate.Side == side) continue;
+                return candidate;
+            }
+
+            return null;
+        }
+
         void OnDisable()
         {
             if (window != null) window.SetZoom(1f, 1f);
+
+            var other = OtherWindow();
+            if (other != null) other.SetZoom(1f, 1f);
         }
 
         public void Configure(PlayerSide newSide, SpriteRenderer newVisual)

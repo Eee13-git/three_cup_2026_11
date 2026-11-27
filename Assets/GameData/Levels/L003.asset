@@ -16,3 +16,9 @@ MonoBehaviour:
   displayName: "\u5173\u5361 3"
   enabled: 1
   levelPrefab: {fileID: 708971636784042094, guid: b8d0a92cf501c7d45bc503ada4d4bf1b, type: 3}
+  windowSize: {x: 4, y: 3}
+  leftWindowOffset: {x: 8, y: 0}
+  rightWindowOffset: {x: -8, y: 0}
+  leftWindowInverted: 0
+  rightWindowInverted: 0
+  windowMirrorAxisX: 0

@@ -226,7 +226,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_Sprite: {fileID: 21300000, guid: 842c9ed006e0d774480041536d0f05ee, type: 3}
+  m_Sprite: {fileID: 21300000, guid: 26d3a6a349890f3458b4b734ab271b99, type: 3}
   m_Type: 0
   m_PreserveAspect: 0
   m_FillCenter: 1
@@ -351,7 +351,7 @@ MonoBehaviour:
   titleText: {fileID: 5686078459377643517}
   bodyText: {fileID: 3679059753722272256}
   footerText: {fileID: 2327285454316116984}
-  widePlate: {fileID: 21300000, guid: 842c9ed006e0d774480041536d0f05ee, type: 3}
+  widePlate: {fileID: 21300000, guid: 26d3a6a349890f3458b4b734ab271b99, type: 3}
   squarePlate: {fileID: 21300000, guid: 8262c3219c86cc2408b92cdc08ad1424, type: 3}
   wideSize: {x: 576, y: 216}
   squareSize: {x: 420, y: 280}

@@ -13,9 +13,17 @@ MonoBehaviour:
   m_Name: L004
   m_EditorClassIdentifier: 
   levelId: L004
-  displayName: "\u5173\u5361 4 \u673A\u5173"
+  displayName: "\u6298\u75D5"
   enabled: 1
   levelPrefab: {fileID: 4220814891903224538, guid: 18663fe1170414b46bdbe4ca6cd29250, type: 3}
   windowSize: {x: 4, y: 3}
   leftWindowOffset: {x: 8, y: 0}
   rightWindowOffset: {x: -8, y: 0}
+  leftWindowInverted: 0
+  rightWindowInverted: 0
+  leftWindowInvertedY: 0
+  rightWindowInvertedY: 0
+  windowMirrorAxisX: 0
+  windowMirrorAxisY: 0
+  tutorialTitle: 
+  tutorialBody: 

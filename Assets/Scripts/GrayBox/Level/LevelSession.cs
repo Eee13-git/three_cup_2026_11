@@ -113,6 +113,22 @@ namespace ThreeCup.GrayBox
                 }
             }
 
+            // 调试跳转：Tab 下一关、Shift+Tab 上一关、End 直接到最后一关
+            if (Input.GetKeyDown(KeyCode.Tab) && catalog.Count > 0)
+            {
+                bool back = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                int from = Mathf.Max(0, currentIndex);
+                int next = (from + (back ? -1 : 1) + catalog.Count) % catalog.Count;
+                LoadIndex(next);
+                return;
+            }
+
+            if (Input.GetKeyDown(KeyCode.End) && catalog.Count > 0)
+            {
+                LoadIndex(catalog.Count - 1);
+                return;
+            }
+
             if (Input.GetKeyDown(KeyCode.R)) RetryLevel();
         }
 

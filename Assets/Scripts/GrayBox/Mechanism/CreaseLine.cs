@@ -34,6 +34,10 @@ namespace ThreeCup.GrayBox
 
         VisionWindow[] windows;
 
+        /// <summary>本折痕翻过的窗口。多条折痕同场时，只能清自己设置过的那几个，
+        /// 否则另一条折痕会对"不属于自己"的窗口调用 ClearCrease，把折痕瞬间抹掉。</summary>
+        readonly System.Collections.Generic.HashSet<VisionWindow> affected = new System.Collections.Generic.HashSet<VisionWindow>();
+
         public MechanismKind Kind => MechanismKind.Crease;
 
         void Awake()
@@ -59,13 +63,21 @@ namespace ThreeCup.GrayBox
 
                 if (!AppliesTo(owner.position.x, midX))
                 {
-                    window.ClearCrease();
+                    // 只清自己翻过的窗口，不去动另一条折痕负责的那一侧
+                    if (affected.Remove(window)) window.ClearCrease();
                     continue;
                 }
 
                 float distance = DistanceToSegment(owner.position, a, b);
-                if (distance <= influence) window.SetCrease(a, b);
-                else window.ClearCrease();
+                if (distance <= influence)
+                {
+                    window.SetCrease(a, b);
+                    affected.Add(window);
+                }
+                else if (affected.Remove(window))
+                {
+                    window.ClearCrease();
+                }
             }
         }
 
@@ -82,10 +94,10 @@ namespace ThreeCup.GrayBox
 
         void OnDisable()
         {
-            if (windows == null) return;
+            foreach (var window in affected)
+                if (window != null) window.ClearCrease();
 
-            for (int i = 0; i < windows.Length; i++)
-                if (windows[i] != null) windows[i].ClearCrease();
+            affected.Clear();
         }
 
         static float DistanceToSegment(Vector2 point, Vector2 a, Vector2 b)

@@ -8,6 +8,7 @@
       "httpUrl": "https://assetstore-mcp.u3d.cn/mcp"
     }
   },
+  "model": "deepseek-flash",
   "contentGenerator": {
     "authType": "codely-oauth",
     "wireApi": "chat",
@@ -25,7 +26,6 @@
     }
   },
   "selectedAuthType": "codely-oauth",
-  "model": "deepseek-flash",
   "flashModel": "codely-flash",
   "multimodalModel": "codely-vl"
 }

@@ -260,7 +260,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   side: 0
   moveSpeed: 5.5
-  jumpVelocity: 8
+  jumpVelocity: 8.6
   fallRespawnY: -6
   invulnerabilitySeconds: 0.5
   groundMask:
